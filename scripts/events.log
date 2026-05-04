@@ -1,0 +1,2 @@
+[2026-05-04T19:19:58+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.2 reasoning_effort=high
+[2026-05-04T19:22:42+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-4o reasoning_effort=high

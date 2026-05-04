@@ -1,0 +1,26 @@
+{
+  "name": "codex-ralph-ml-sandbox",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "BASE_IMAGE": "mcr.microsoft.com/devcontainers/python:3.11-bookworm",
+      "USERNAME": "vscode"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "CODEX_HOME": "/home/vscode/.codex"
+  },
+ "mounts": [
+  "source=codex-home-ford-dock-360,target=/home/vscode/.codex,type=volume",
+  "source=python-cache-ford-dock-360,target=/home/vscode/.cache/pip,type=volume",
+  "source=npm-cache-ford-dock-360,target=/home/vscode/.npm,type=volume"
+],
+  "forwardPorts": [8888]
+}
