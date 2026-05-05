@@ -25,6 +25,7 @@ FEATURE_COLS = [
     "qtde_revisoes_24m",
     "share_revisoes_rede_24m",
     "gasto_manutencao_rede_24m",
+    "satisfacao_marca_24m",
 ]
 
 PERFIS = ["fiel", "economico", "abandono", "esquecido"]
@@ -35,7 +36,7 @@ def _make_pipeline(n_clusters):
         [
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
-            ("kmeans", KMeans(n_clusters=n_clusters, random_state=RANDOM_STATE)),
+            ("kmeans", KMeans(n_clusters=n_clusters, random_state=RANDOM_STATE, n_init=20, max_iter=500)),
         ]
     )
 
@@ -63,7 +64,7 @@ def _map_clusters_to_profiles(df, labels):
     return mapping
 
 
-def plot_pca_clusters(df, labels, pipeline, output_path="reports/clusters_pca"):
+def plot_pca_clusters(df, labels, pipeline, output_path="reports/clusters_pca.png"):
     os.makedirs("reports", exist_ok=True)
 
     x_scaled = pipeline[:-1].transform(df[FEATURE_COLS])
@@ -128,7 +129,7 @@ def run_clustering(input_path="data/raw/ford_clientes_historico_completo.csv"):
     plt.xlabel("k")
     plt.ylabel("Silhouette")
     plt.title("Silhouette")
-    plt.savefig("reports/elbow_silhouette", format="png", dpi=150, bbox_inches="tight")
+    plt.savefig("reports/elbow_silhouette.png", format="png", dpi=150, bbox_inches="tight")
     plt.close()
 
     pipeline = _make_pipeline(4)
@@ -147,7 +148,7 @@ def run_clustering(input_path="data/raw/ford_clientes_historico_completo.csv"):
             "perfil_cluster": pd.Series(labels).map(mapping),
         }
     )
-    labels_df.to_csv("data/processed/cluster_labels", index=False)
+    labels_df.to_csv("data/processed/cluster_labels.csv", index=False)
 
     plot_pca_clusters(df, labels, pipeline)
     print("Labels salvos em data/processed/cluster_labels")

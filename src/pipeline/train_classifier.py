@@ -62,13 +62,19 @@ def _split_columns(x):
 
 
 def train_all_models(
-    input_path="data/raw/ford_clientes_historico_completo.csv",
-    target_col="perfil_latente",
+    input_path="data/raw/ford_clientes_operacional_compra.csv",
+    target_col="perfil_cluster",
     output_path="reports/model_comparison",
+    labels_path="data/processed/cluster_labels.csv",
 ):
     os.makedirs("reports", exist_ok=True)
 
     df = pd.read_csv(input_path)
+
+    # Merge com labels do clustering — target vem da Base 1 via K-Means
+    labels = pd.read_csv(labels_path)[["cliente_id", "perfil_cluster"]]
+    df = df.merge(labels, left_on="id_cliente", right_on="cliente_id", how="inner")
+
     if target_col not in df.columns:
         raise ValueError(f"Coluna target ausente: {target_col}")
 
@@ -98,7 +104,7 @@ def train_all_models(
             class_weight="balanced",
             max_features="sqrt",
             random_state=RANDOM_STATE,
-            n_jobs=-1,
+            n_jobs=2,
         ),
     }
 

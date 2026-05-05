@@ -126,7 +126,7 @@ def train_churn_model(
         max_features="sqrt",
         min_samples_leaf=5,
         random_state=RANDOM_STATE,
-        n_jobs=-1,
+        n_jobs=2,
     )
 
     pipeline = Pipeline(

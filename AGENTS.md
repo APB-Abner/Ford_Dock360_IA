@@ -86,3 +86,23 @@ Nao adicione dependencias fora dessa lista sem perguntar.
 
 - models/: churn_rf_calibrated.joblib (obrigatorio), perfil_rf_classifier.joblib (opcional)
 - Endpoints /predict e /predict/batch exigem role analyst ou admin
+
+## Complaints e Ficha de Abordagem
+
+- data/raw/ford_complaints_top3_por_modelo.csv — top 3 problemas historicos por modelo Ford
+  - Colunas: modelo, rank, componente, total_reclamacoes
+  - Fonte: reclamacoes NHTSA 2010-2024 filtradas para modelos Brasil
+  - Nao e dado de ML — e contexto para a Ficha de Abordagem
+
+- src/pipeline/complaints_loader.py
+  - load_complaints_top3() -> DataFrame completo
+  - get_top3_por_modelo(modelo) -> list[dict] com rank, componente, total_reclamacoes
+  - Match case-insensitive. Retorna [] se nao encontrado ou CSV ausente.
+
+- PredictResponse campos:
+  - prediction, churn_probability, risk_level (churn — obrigatorio)
+  - perfil_previsto, probabilidades_perfil, acao_recomendada (perfil — opcional)
+  - historico_problemas (ficha de abordagem — opcional)
+
+- models/: churn_rf_calibrated.joblib (obrigatorio), perfil_rf_classifier.joblib (opcional)
+- Endpoints /predict e /predict/batch exigem role analyst ou admin
