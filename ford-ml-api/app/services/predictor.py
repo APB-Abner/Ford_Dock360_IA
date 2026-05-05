@@ -1,14 +1,10 @@
 import os
-import sys
 from pathlib import Path
 import joblib
 import pandas as pd
 from fastapi import HTTPException
+from app.config import settings
 from app.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 try:
     from src.pipeline.complaints_loader import get_top3_por_modelo
@@ -37,7 +33,7 @@ class PredictorService:
 
     def _model_path(self, filename):
         env_key = "MODEL_PATH_" + filename.upper().replace(".", "_").replace("-", "_")
-        return Path(os.environ.get(env_key, _PROJECT_ROOT / "models" / filename))
+        return Path(os.environ.get(env_key, Path(settings.MODELS_DIR) / filename))
 
     def _load_churn(self):
         if self.model_churn is None:

@@ -1,4 +1,5 @@
-import matplotlib; matplotlib.use("Agg")
+import matplotlib
+matplotlib.use("Agg")
 
 import os
 from importlib.machinery import SourceFileLoader

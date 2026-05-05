@@ -1,6 +1,6 @@
 data/
 mlruns/
-/models/
+//models/
 reports/
 .codex/
 .claude/

@@ -1,9 +1,9 @@
-import os
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
+from app.config import settings
 from app.models.schemas import RoleEnum
 
 
@@ -16,16 +16,9 @@ ROLE_LEVELS = {
 }
 
 
-def _secret_key():
-    secret_key = os.environ.get("SECRET_KEY")
-    if not secret_key:
-        raise HTTPException(status_code=500, detail="SECRET_KEY nao configurada")
-    return secret_key
-
-
 def _current_role(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     try:
-        payload = jwt.decode(credentials.credentials, _secret_key(), algorithms=[ALGORITHM])
+        payload = jwt.decode(credentials.credentials, settings.SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(status_code=401, detail="Token JWT invalido")
 
