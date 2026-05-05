@@ -1,5 +1,5 @@
 {
-  "name": "codex-ralph-ml-sandbox",
+  "name": "ford-vinguard-dev",
   "build": {
     "dockerfile": "Dockerfile",
     "context": "..",
@@ -17,10 +17,15 @@
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
     "CODEX_HOME": "/home/vscode/.codex"
   },
- "mounts": [
-  "source=codex-home-ford-dock-360,target=/home/vscode/.codex,type=volume",
-  "source=python-cache-ford-dock-360,target=/home/vscode/.cache/pip,type=volume",
-  "source=npm-cache-ford-dock-360,target=/home/vscode/.npm,type=volume"
-],
-  "forwardPorts": [8888]
+  "mounts": [
+    "source=codex-home-ford-vinguard,target=/home/vscode/.codex,type=volume",
+    "source=python-cache-ford-vinguard,target=/home/vscode/.cache/pip,type=volume",
+    "source=npm-cache-ford-vinguard,target=/home/vscode/.npm,type=volume"
+  ],
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [
+    8000,
+    8888,
+    5000
+  ]
 }

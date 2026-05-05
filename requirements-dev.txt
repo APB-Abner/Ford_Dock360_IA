@@ -6,22 +6,7 @@ nbformat
 nbconvert
 jupytext
 
-numpy
-pandas
-scikit-learn
-scipy
-matplotlib
-seaborn
-
-pydantic
-python-dotenv
-pyyaml
-joblib
-
 pytest
 ruff
 black
 mypy
-
-rich
-typer

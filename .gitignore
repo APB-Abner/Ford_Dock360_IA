@@ -1,0 +1,14 @@
+data/
+mlruns/
+models/
+reports/
+.codex/
+.claude/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+*.pkl
+*.joblib

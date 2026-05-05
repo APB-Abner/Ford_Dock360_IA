@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p notebooks src/pipeline data/raw data/processed models reports tests .codex/ralph-pipeline
+mkdir -p notebooks src/pipeline data/raw data/processed models reports tests
 
 echo "Container criado."
 echo "User: $(whoami)"
