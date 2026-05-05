@@ -79,7 +79,7 @@ if [[ "$SKIP_SECURITY" != "true" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 PRD_FILE="$SCRIPT_DIR/prd.json"
 RUN_LOG="$SCRIPT_DIR/run.log"
@@ -208,7 +208,7 @@ mark_progress_checked() {
 }
 
 # Pinned by default. Adjust as needed for your Codex access and preference.
-REQUESTED_MODEL="gpt-4o"
+REQUESTED_MODEL="gpt-5.5"
 REASONING_EFFORT="high"
 
 if [[ -n "${CODEX_MODEL:-}" && "${CODEX_MODEL}" != "$REQUESTED_MODEL" ]]; then
@@ -244,7 +244,7 @@ MODEL_CHECK_CMD=(
   -C "$REPO_ROOT"
   -m "$REQUESTED_MODEL"
   -c "model_reasoning_effort=\"$REASONING_EFFORT\""
-  -s read-only
+  -s danger-full-access
   "Respond with exactly: OK"
 )
 
@@ -269,7 +269,7 @@ CODEX_ARGS+=(
   -C "$REPO_ROOT"
   -m "$REQUESTED_MODEL"
   -c "model_reasoning_effort=\"$REASONING_EFFORT\""
-  -s read-only
+  -s danger-full-access
 )
 
 for i in $(seq 1 "$MAX_ITERATIONS"); do

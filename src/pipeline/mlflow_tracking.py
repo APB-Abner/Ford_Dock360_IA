@@ -228,6 +228,8 @@ def register_perfil_classifier(
             class_weight="balanced",
             random_state=RANDOM_STATE,
         ),
+        # Hiperparametros reduzidos intencionalmente para velocidade de tracking.
+        # Modelo de producao usa n_estimators=200 (ver train_classifier.py)
         "RandomForest": RandomForestClassifier(
             n_estimators=50,
             max_depth=8,

@@ -1,2 +1,96 @@
 [2026-05-04T19:19:58+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.2 reasoning_effort=high
 [2026-05-04T19:22:42+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-4o reasoning_effort=high
+[2026-05-04T19:25:30+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-4o reasoning_effort=high
+[2026-05-04T19:26:54+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-4o reasoning_effort=high
+[2026-05-04T20:03:58+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-4o reasoning_effort=high
+[2026-05-04T20:08:37+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=o4-mini reasoning_effort=high
+[2026-05-04T20:10:17+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T20:10:22+0000] ITERATION START 1/20
+[2026-05-04T20:37:52+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T20:37:58+0000] ITERATION START 1/20
+[2026-05-04T20:37:58+0000] ERROR story=US-001 could-not-determine-output-path
+[2026-05-04T21:03:50+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T21:03:56+0000] ITERATION START 1/20
+[2026-05-04T21:43:34+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T21:43:41+0000] ITERATION START 1/20
+[2026-05-04T21:43:42+0000] STORY START id=US-001 attempt=2 out=src/pipeline/config title=Estrutura de diretorios
+[2026-05-04T21:51:35+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T21:51:41+0000] ITERATION START 1/20
+[2026-05-04T21:51:41+0000] STORY START id=US-001 attempt=3 out=src/pipeline/config title=Estrutura de diretorios
+[2026-05-04T21:53:12+0000] STORY COMPLETE id=US-001 wrote=src/pipeline/config bytes=
+[2026-05-04T21:53:14+0000] ITERATION START 2/20
+[2026-05-04T21:53:15+0000] STORY START id=US-002 attempt=1 out=src/pipeline/generate_data title=Gerador de dados sinteticos
+[2026-05-04T21:54:11+0000] STORY COMPLETE id=US-002 wrote=src/pipeline/generate_data bytes=
+[2026-05-04T21:54:13+0000] ITERATION START 3/20
+[2026-05-04T21:54:13+0000] STORY START id=US-003 attempt=1 out=data/raw/ford_clientes_historico_completo title=Geracao dos arquivos CSV
+[2026-05-04T21:55:09+0000] STORY COMPLETE id=US-003 wrote=data/raw/ford_clientes_historico_completo bytes=
+[2026-05-04T21:55:11+0000] ITERATION START 4/20
+[2026-05-04T21:55:11+0000] STORY START id=US-004 attempt=1 out=notebooks/01_eda_base1 title=EDA das duas bases
+[2026-05-04T21:56:14+0000] STORY COMPLETE id=US-004 wrote=notebooks/01_eda_base1 bytes=
+[2026-05-04T21:56:17+0000] ITERATION START 5/20
+[2026-05-04T21:56:17+0000] STORY START id=US-005 attempt=1 out=src/pipeline/clustering title=K-Means Clustering e PCA
+[2026-05-04T21:57:33+0000] STORY COMPLETE id=US-005 wrote=src/pipeline/clustering bytes=
+[2026-05-04T21:57:35+0000] ITERATION START 6/20
+[2026-05-04T21:57:36+0000] STORY START id=US-006 attempt=1 out=src/pipeline/preprocessor title=Preprocessor e Classificadores
+[2026-05-04T21:58:28+0000] STORY COMPLETE id=US-006 wrote=src/pipeline/preprocessor bytes=
+[2026-05-04T21:58:30+0000] ITERATION START 7/20
+[2026-05-04T21:58:30+0000] STORY START id=US-007 attempt=1 out=src/pipeline/visualizations title=Visualizacoes dos classificadores
+[2026-05-04T21:59:38+0000] STORY COMPLETE id=US-007 wrote=src/pipeline/visualizations bytes=
+[2026-05-04T21:59:40+0000] ITERATION START 8/20
+[2026-05-04T21:59:41+0000] STORY START id=US-008 attempt=1 out=src/pipeline/train_churn title=Classificador de Churn
+[2026-05-04T22:01:02+0000] STORY COMPLETE id=US-008 wrote=src/pipeline/train_churn bytes=
+[2026-05-04T22:01:04+0000] ITERATION START 9/20
+[2026-05-04T22:01:05+0000] STORY START id=US-009 attempt=1 out=src/pipeline/mlflow_tracking title=Tracking MLflow
+[2026-05-04T22:02:24+0000] STORY COMPLETE id=US-009 wrote=src/pipeline/mlflow_tracking bytes=
+[2026-05-04T22:02:26+0000] ITERATION START 10/20
+[2026-05-04T22:02:26+0000] STORY START id=US-010 attempt=1 out=ford-ml-api/app/main title=API FastAPI completa
+[2026-05-04T22:03:22+0000] STORY COMPLETE id=US-010 wrote=ford-ml-api/app/main bytes=
+[2026-05-04T22:03:24+0000] ITERATION START 11/20
+[2026-05-04T22:03:24+0000] STORY START id=US-011 attempt=1 out=notebooks/00_pipeline_completo title=Notebook consolidado e relatorio
+[2026-05-04T22:04:28+0000] STORY COMPLETE id=US-011 wrote=notebooks/00_pipeline_completo bytes=
+[2026-05-04T22:04:28+0000] RUN COMPLETE (all stories passed)
+[2026-05-04T22:07:04+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T22:07:47+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T22:07:51+0000] ITERATION START 1/20
+[2026-05-04T22:07:51+0000] RUN COMPLETE (no incomplete stories)
+[2026-05-04T22:07:55+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T22:08:00+0000] ITERATION START 1/20
+[2026-05-04T22:08:00+0000] RUN COMPLETE (no incomplete stories)
+[2026-05-04T22:08:39+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-04T22:08:44+0000] ITERATION START 1/20
+[2026-05-04T22:08:44+0000] STORY START id=US-001 attempt=4 out=src/pipeline/config title=Estrutura de diretorios
+[2026-05-04T22:09:56+0000] STORY COMPLETE id=US-001 wrote=src/pipeline/config bytes=
+[2026-05-04T22:09:58+0000] ITERATION START 2/20
+[2026-05-04T22:09:59+0000] STORY START id=US-002 attempt=2 out=src/pipeline/generate_data title=Gerador de dados sinteticos
+[2026-05-04T22:10:52+0000] STORY COMPLETE id=US-002 wrote=src/pipeline/generate_data bytes=
+[2026-05-04T22:10:54+0000] ITERATION START 3/20
+[2026-05-04T22:10:54+0000] STORY START id=US-003 attempt=2 out=data/raw/ford_clientes_historico_completo title=Geracao dos arquivos CSV
+[2026-05-04T22:12:00+0000] STORY COMPLETE id=US-003 wrote=data/raw/ford_clientes_historico_completo bytes=
+[2026-05-04T22:12:02+0000] ITERATION START 4/20
+[2026-05-04T22:12:03+0000] STORY START id=US-004 attempt=2 out=notebooks/01_eda_base1 title=EDA das duas bases
+[2026-05-04T22:12:56+0000] STORY COMPLETE id=US-004 wrote=notebooks/01_eda_base1 bytes=
+[2026-05-04T22:12:58+0000] ITERATION START 5/20
+[2026-05-04T22:12:58+0000] STORY START id=US-005 attempt=2 out=src/pipeline/clustering title=K-Means Clustering e PCA
+[2026-05-04T22:14:18+0000] STORY COMPLETE id=US-005 wrote=src/pipeline/clustering bytes=
+[2026-05-04T22:14:20+0000] ITERATION START 6/20
+[2026-05-04T22:14:20+0000] STORY START id=US-006 attempt=2 out=src/pipeline/preprocessor title=Preprocessor e Classificadores
+[2026-05-04T22:15:28+0000] STORY COMPLETE id=US-006 wrote=src/pipeline/preprocessor bytes=
+[2026-05-04T22:15:30+0000] ITERATION START 7/20
+[2026-05-04T22:15:30+0000] STORY START id=US-007 attempt=2 out=src/pipeline/visualizations title=Visualizacoes dos classificadores
+[2026-05-04T22:16:30+0000] STORY COMPLETE id=US-007 wrote=src/pipeline/visualizations bytes=
+[2026-05-04T22:16:32+0000] ITERATION START 8/20
+[2026-05-04T22:16:33+0000] STORY START id=US-008 attempt=2 out=src/pipeline/train_churn title=Classificador de Churn
+[2026-05-04T22:17:32+0000] STORY COMPLETE id=US-008 wrote=src/pipeline/train_churn bytes=
+[2026-05-04T22:17:34+0000] ITERATION START 9/20
+[2026-05-04T22:17:34+0000] STORY START id=US-009 attempt=2 out=src/pipeline/mlflow_tracking title=Tracking MLflow
+[2026-05-04T22:18:50+0000] STORY COMPLETE id=US-009 wrote=src/pipeline/mlflow_tracking bytes=
+[2026-05-04T22:18:52+0000] ITERATION START 10/20
+[2026-05-04T22:18:52+0000] STORY START id=US-010 attempt=2 out=ford-ml-api/app/main title=API FastAPI completa
+[2026-05-04T22:19:48+0000] STORY COMPLETE id=US-010 wrote=ford-ml-api/app/main bytes=
+[2026-05-04T22:19:50+0000] ITERATION START 11/20
+[2026-05-04T22:19:50+0000] STORY START id=US-011 attempt=2 out=notebooks/00_pipeline_completo title=Notebook consolidado e relatorio
+[2026-05-04T22:20:54+0000] STORY COMPLETE id=US-011 wrote=notebooks/00_pipeline_completo bytes=
+[2026-05-04T22:20:54+0000] RUN COMPLETE (all stories passed)
+[2026-05-05T04:43:20+0000] RUN START max_iterations=20 max_attempts_per_story=5 search=true model=gpt-5.5 reasoning_effort=high
+[2026-05-05T04:43:26+0000] ITERATION START 1/20
+[2026-05-05T04:43:26+0000] ERROR story=US-001 could-not-determine-output-path

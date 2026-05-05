@@ -1,3 +1,4 @@
+
 # Ford VinGuard
 
 Projeto de machine learning para o pipeline Ford VinGuard.
@@ -57,3 +58,5 @@ pip install -r requirements.txt
 - `reports/`: graficos e relatorios
 - `tests/`: testes unitarios simples
 - `ford-ml-api/app/`: aplicacao FastAPI
+
+

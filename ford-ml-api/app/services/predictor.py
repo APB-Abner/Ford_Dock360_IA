@@ -1,11 +1,27 @@
 import os
+import sys
 from pathlib import Path
-
 import joblib
 import pandas as pd
 from fastapi import HTTPException
-
 from app.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+try:
+    from src.pipeline.complaints_loader import get_top3_por_modelo
+    _COMPLAINTS_OK = True
+except ImportError:
+    _COMPLAINTS_OK = False
+
+_ACOES = {
+    "abandono": "Ativar Pulse Loop imediato. Oferecer plano de manutencao com desconto antes da primeira revisao.",
+    "esquecido": "Configurar lembrete 45 dias antes do vencimento. Verificar disponibilidade de agenda.",
+    "economico": "Apresentar tabela comparativa custo oficial vs externo. Oferta de pacote economico com preco fixo.",
+    "fiel": "Nenhuma acao ativa. Registrar para agradecimento apos proxima revisao.",
+}
 
 
 class PredictorService:
@@ -14,58 +30,81 @@ class PredictorService:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.model = None
+            cls._instance.model_churn = None
+            cls._instance.model_perfil = None
             cls._instance.feature_names = None
         return cls._instance
 
-    def _model_path(self):
-        default_path = Path(__file__).resolve().parents[3] / "models" / "churn_rf_calibrated.joblib"
-        return Path(os.environ.get("MODEL_PATH", default_path))
+    def _model_path(self, filename):
+        env_key = "MODEL_PATH_" + filename.upper().replace(".", "_").replace("-", "_")
+        return Path(os.environ.get(env_key, _PROJECT_ROOT / "models" / filename))
 
-    def load_model(self):
-        if self.model is None:
-            model_path = self._model_path()
-            if not model_path.exists():
-                raise HTTPException(status_code=503, detail=f"Modelo nao encontrado: {model_path}")
-            self.model = joblib.load(model_path)
-            self.feature_names = list(getattr(self.model, "feature_names_in_", []))
-        return self.model
+    def _load_churn(self):
+        if self.model_churn is None:
+            path = self._model_path("churn_rf_calibrated.joblib")
+            if not path.exists():
+                raise HTTPException(status_code=503, detail=f"Modelo churn nao encontrado: {path}")
+            self.model_churn = joblib.load(path)
+            self.feature_names = list(getattr(self.model_churn, "feature_names_in_", []))
+        return self.model_churn
+
+    def _load_perfil(self):
+        if self.model_perfil is None:
+            path = self._model_path("perfil_rf_classifier.joblib")
+            if path.exists():
+                self.model_perfil = joblib.load(path)
+        return self.model_perfil
 
     def _build_frame(self, features):
-        self.load_model()
+        self._load_churn()
         if not self.feature_names:
-            estimator = getattr(self.model, "estimator", None)
+            estimator = getattr(self.model_churn, "estimator", None)
             preprocessor = getattr(estimator, "named_steps", {}).get("preprocessor")
             self.feature_names = list(getattr(preprocessor, "feature_names_in_", []))
-
         if self.feature_names:
-            missing = [col for col in self.feature_names if col not in features]
+            missing = [c for c in self.feature_names if c not in features]
             if missing:
                 raise HTTPException(status_code=422, detail={"missing_features": missing})
-            features = {col: features[col] for col in self.feature_names}
+            features = {c: features[c] for c in self.feature_names}
         return pd.DataFrame([features])
 
-    def predict(self, features):
-        model = self.load_model()
+    def _predict_churn(self, frame):
+        model = self._load_churn()
+        prob = float(model.predict_proba(frame)[0][1]) if hasattr(model, "predict_proba") else float(model.predict(frame)[0])
+        label = ChurnLabelEnum.churn if prob >= 0.5 else ChurnLabelEnum.no_churn
+        risk = RiskLevelEnum.high if prob >= 0.70 else (RiskLevelEnum.medium if prob >= 0.40 else RiskLevelEnum.low)
+        return label, round(prob, 6), risk
+
+    def _predict_perfil(self, frame):
+        model = self._load_perfil()
+        if model is None:
+            return None, None
+        try:
+            probs = model.predict_proba(frame)[0]
+            classes = model.classes_
+            perfil = str(classes[probs.argmax()])
+            return perfil, {str(c): round(float(p), 4) for c, p in zip(classes, probs)}
+        except Exception:
+            return None, None
+
+    def predict(self, features, modelo_veiculo=None):
         frame = self._build_frame(features)
-
-        if hasattr(model, "predict_proba"):
-            probability = float(model.predict_proba(frame)[0][1])
-        else:
-            probability = float(model.predict(frame)[0])
-
-        label = ChurnLabelEnum.churn if probability >= 0.5 else ChurnLabelEnum.no_churn
-        if probability >= 0.70:
-            risk = RiskLevelEnum.high
-        elif probability >= 0.40:
-            risk = RiskLevelEnum.medium
-        else:
-            risk = RiskLevelEnum.low
-
+        label, prob_churn, risk = self._predict_churn(frame)
+        perfil, prob_perfil = self._predict_perfil(frame)
+        historico = []
+        if _COMPLAINTS_OK and modelo_veiculo:
+            try:
+                historico = get_top3_por_modelo(modelo_veiculo)
+            except Exception:
+                pass
         return PredictResponse(
             prediction=label,
-            churn_probability=round(probability, 6),
+            churn_probability=prob_churn,
             risk_level=risk,
+            perfil_previsto=perfil,
+            probabilidades_perfil=prob_perfil,
+            acao_recomendada=_ACOES.get(perfil) if perfil else None,
+            historico_problemas=historico,
         )
 
 

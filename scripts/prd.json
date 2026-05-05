@@ -1,0 +1,141 @@
+{
+  "project": "Ford_Dock360",
+  "branchName": "ralph/ajustes-auditoria-complaints",
+  "description": "Correcoes identificadas na auditoria + integracao do ford_complaints_top3_por_modelo.csv na Ficha de Abordagem",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remover .codex/ do historico git",
+      "description": "Como desenvolvedor, preciso que o diretorio .codex/ seja removido do rastreamento git para que nao seja versionado acidentalmente.",
+      "acceptanceCriteria": [
+        "Executar git rm -r --cached .codex/ sem erros",
+        "Adicionar entrada .codex/ no .gitignore se ainda nao existir",
+        "Confirmar que .codex/ aparece como untracked apos o comando",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "O .gitignore ja tem a entrada mas o diretorio foi commitado antes. git rm --cached nao apaga os arquivos locais, apenas para de rastrear."
+    },
+    {
+      "id": "US-002",
+      "title": "Corrigir permissao do endpoint /predict de viewer para analyst",
+      "description": "Como arquiteto de seguranca, preciso que o endpoint POST /predict exija role analyst em vez de viewer, pois viewer so deve acessar /health.",
+      "acceptanceCriteria": [
+        "Em ford-ml-api/app/routers/predict.py, trocar require_role(RoleEnum.viewer) por require_role(RoleEnum.analyst) no endpoint /predict",
+        "Endpoint /predict/batch permanece com RoleEnum.analyst",
+        "python -m py_compile ford-ml-api/app/routers/predict.py passa sem erros",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Arquivo: ford-ml-api/app/routers/predict.py linha do decorator do endpoint POST /predict"
+    },
+    {
+      "id": "US-003",
+      "title": "Corrigir ValueError fatal em visualizations.py para aviso",
+      "description": "Como engenheiro de ML, preciso que a verificacao de plano_manutencao no top 3 de feature importance seja um aviso em vez de um erro fatal que interrompe o pipeline.",
+      "acceptanceCriteria": [
+        "Em src/pipeline/visualizations.py, substituir o bloco raise ValueError por print de aviso com prefixo AVISO:",
+        "A funcao plot_feature_importance continua retornando o DataFrame de importancias normalmente mesmo que plano_manutencao nao esteja no top 3",
+        "python -m py_compile src/pipeline/visualizations.py passa sem erros",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Trecho a alterar em plot_feature_importance: if not any(feature.startswith('plano_manutencao') for feature in top3): raise ValueError(...) -> print('AVISO: plano_manutencao nao ficou no top 3:', top3)"
+    },
+    {
+      "id": "US-004",
+      "title": "Adicionar verificacao de CWD no notebook principal",
+      "description": "Como usuario do Jupyter, preciso que o notebook 00_pipeline_completo.ipynb verifique e corrija o diretorio de trabalho para a raiz do projeto ao ser executado de qualquer pasta.",
+      "acceptanceCriteria": [
+        "Adicionar celula no inicio do notebook 00_pipeline_completo.ipynb apos o import de matplotlib que verifica se Path('src/pipeline').exists()",
+        "Se nao existir, o notebook tenta subir um nivel com os.chdir('..')",
+        "Se ainda nao existir apos subir, exibe mensagem clara: Execute o notebook a partir da raiz do projeto Ford_Dock360",
+        "python -m json.tool notebooks/00_pipeline_completo.ipynb passa sem erros",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Inserir como segunda celula de codigo logo apos a celula de imports. Usar Path('src/pipeline').exists() como indicador de raiz correta."
+    },
+    {
+      "id": "US-005",
+      "title": "Documentar diferenca de n_estimators entre mlflow_tracking.py e train_classifier.py",
+      "description": "Como desenvolvedor, preciso que a diferenca intencional de hiperparametros entre mlflow_tracking.py (n_estimators=50) e train_classifier.py (n_estimators=200) esteja documentada com comentarios claros para nao gerar confusao na banca.",
+      "acceptanceCriteria": [
+        "Em src/pipeline/mlflow_tracking.py, adicionar comentario acima da definicao de RandomForest explicando que n_estimators=50 e intencional para velocidade de tracking e nao representa o modelo de producao",
+        "Adicionar comentario similar acima de DecisionTree e LogisticRegression no mesmo arquivo",
+        "python -m py_compile src/pipeline/mlflow_tracking.py passa sem erros",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Comentario sugerido: # Hiperparametros reduzidos intencionalmente para velocidade de tracking. O modelo de producao usa n_estimators=200 (ver train_classifier.py)"
+    },
+    {
+      "id": "US-006",
+      "title": "Adicionar ford_complaints_top3_por_modelo.csv em data/raw e criar loader utilitario",
+      "description": "Como desenvolvedor, preciso que o arquivo ford_complaints_top3_por_modelo.csv seja copiado para data/raw/ e que exista uma funcao utilitaria para carrega-lo, para ser consumido pela Ficha de Abordagem.",
+      "acceptanceCriteria": [
+        "Criar data/raw/ford_complaints_top3_por_modelo.csv com as colunas: modelo, rank, componente, total_reclamacoes",
+        "Criar src/pipeline/complaints_loader.py com funcao load_complaints_top3() que retorna DataFrame com as colunas modelo, rank, componente, total_reclamacoes",
+        "Criar funcao get_top3_por_modelo(modelo: str) -> list[dict] que retorna lista com os top 3 problemas do modelo informado ou lista vazia se modelo nao encontrado",
+        "python -m py_compile src/pipeline/complaints_loader.py passa sem erros",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "O CSV contem 51 linhas com modelos: Bronco, Bronco Sport, EcoSport, Edge, Expedition, Explorer, F-150, F-250, F-350, Fiesta, Focus, Fusion, Maverick, Mustang, Ranger, Transit, Transit Connect. A funcao get_top3_por_modelo deve fazer match case-insensitive."
+    },
+    {
+      "id": "US-007",
+      "title": "Integrar classificador de perfil no predictor.py da FastAPI",
+      "description": "Como desenvolvedor da API, preciso que o PredictorService carregue e sirva tanto o modelo de churn quanto o classificador de perfil, retornando perfil_previsto, probabilidades_perfil, probabilidade_churn, nivel_risco e acao_recomendada.",
+      "acceptanceCriteria": [
+        "Em ford-ml-api/app/models/schemas.py, atualizar PredictResponse para incluir os campos: perfil_previsto (str), probabilidades_perfil (dict[str, float]), probabilidade_churn (float), nivel_risco (str), acao_recomendada (str)",
+        "Em ford-ml-api/app/services/predictor.py, adicionar carregamento do modelo ford_perfil_classifier.joblib via joblib alem do churn_rf_calibrated.joblib",
+        "Adicionar metodo _predict_perfil(frame) que retorna perfil_previsto e probabilidades_perfil",
+        "Atualizar metodo predict() para retornar PredictResponse completo com ambos os modelos",
+        "Adicionar metodo _gerar_acao_recomendada(perfil) com acoes para: abandono, esquecido, economico, fiel",
+        "python -m py_compile ford-ml-api/app/services/predictor.py ford-ml-api/app/models/schemas.py passa sem erros",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Acoes recomendadas: abandono='Ativar Pulse Loop imediato. Oferecer plano de manutencao com desconto antes da primeira revisao.' | esquecido='Configurar lembrete 45 dias antes do vencimento. Verificar agenda.' | economico='Apresentar tabela comparativa de custo oficial vs externo. Oferta de pacote economico.' | fiel='Nenhuma acao ativa. Registrar para agradecimento apos proxima revisao.' | O modelo perfil deve ser carregado de models/perfil_rf_classifier.joblib. Se o arquivo nao existir, o servico deve continuar funcional servindo apenas churn com perfil_previsto=None."
+    },
+    {
+      "id": "US-008",
+      "title": "Integrar complaints_loader na resposta da Ficha de Abordagem",
+      "description": "Como consultor no Dock 360, preciso que o endpoint /predict retorne tambem os top 3 problemas historicos do modelo do veiculo para enriquecer a Ficha de Abordagem.",
+      "acceptanceCriteria": [
+        "Em ford-ml-api/app/models/schemas.py, adicionar campo opcional historico_problemas: list[dict] | None = None no PredictResponse",
+        "Em ford-ml-api/app/services/predictor.py, importar get_top3_por_modelo de src/pipeline/complaints_loader via importlib ou path relativo",
+        "No metodo predict(), popular historico_problemas com o resultado de get_top3_por_modelo(modelo_veiculo) quando modelo_veiculo estiver disponivel no request",
+        "Se modelo_veiculo nao for informado ou nao for encontrado no CSV, historico_problemas retorna lista vazia []",
+        "python -m py_compile ford-ml-api/app/services/predictor.py ford-ml-api/app/models/schemas.py passa sem erros",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "O campo modelo_veiculo ja existe no PredictRequest como opcional (str | None). A integracao deve ser resiliente: se o CSV nao existir em data/raw/, retorna lista vazia sem quebrar o endpoint. Usar try/except ao redor do import e da chamada."
+    },
+    {
+      "id": "US-009",
+      "title": "Atualizar AGENTS.md com regras das novas incorporacoes",
+      "description": "Como agente autonomo que vai continuar o projeto, preciso que o AGENTS.md reflita as novas convencoes: complaints_loader, modelo de perfil e campo historico_problemas.",
+      "acceptanceCriteria": [
+        "Adicionar secao no AGENTS.md documentando o arquivo data/raw/ford_complaints_top3_por_modelo.csv e a funcao get_top3_por_modelo",
+        "Documentar que o PredictResponse agora tem dois modelos: perfil_previsto e probabilidade_churn",
+        "Documentar que historico_problemas e campo opcional do response e deve ser populado via complaints_loader",
+        "Documentar que models/ contem dois arquivos: churn_rf_calibrated.joblib e perfil_rf_classifier.joblib",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Manter o estilo atual do AGENTS.md: sem travessoes, sem tipo hints excessivos, regras curtas e diretas. Adicionar ao final do arquivo como nova secao chamada ## Complaints e Ficha de Abordagem"
+    }
+  ]
+}
