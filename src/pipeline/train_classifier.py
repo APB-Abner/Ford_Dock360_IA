@@ -1,5 +1,4 @@
 import os
-from importlib.machinery import SourceFileLoader
 
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -8,16 +7,12 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 
-try:
-    from src.pipeline.preprocessor import build_preprocessor
-except ModuleNotFoundError:
-    build_preprocessor = SourceFileLoader(
-        "preprocessor",
-        os.path.join(os.path.dirname(__file__), "preprocessor.py"),
-    ).load_module().build_preprocessor
+from src.pipeline.preprocessor import build_preprocessor
 
 
 RANDOM_STATE = 42
+MAX_F1_MACRO_WITHOUT_LEAKAGE = 0.92
+MAX_AUC_WITHOUT_LEAKAGE = 0.95
 
 LEAKAGE_COLS = [
     "fez_primeira_revisao_rede",
@@ -39,6 +34,24 @@ def check_leakage(x):
     found = [col for col in LEAKAGE_COLS if col in x.columns]
     if found:
         raise ValueError(f"Colunas com data leakage em X: {found}")
+
+
+def audit_features_used(feature_names):
+    found = [col for col in LEAKAGE_COLS if col in feature_names]
+    if found:
+        raise ValueError(f"Auditoria pos-treino encontrou leakage em features: {found}")
+    print("Auditoria pos-treino: nenhuma coluna proibida em X.")
+
+
+def assert_metrics_not_suspicious(f1_macro=None, auc=None):
+    if f1_macro is not None and f1_macro > MAX_F1_MACRO_WITHOUT_LEAKAGE:
+        raise AssertionError(
+            f"F1 Macro suspeito ({f1_macro:.4f}) acima de {MAX_F1_MACRO_WITHOUT_LEAKAGE:.2f}; possivel leakage."
+        )
+    if auc is not None and auc > MAX_AUC_WITHOUT_LEAKAGE:
+        raise AssertionError(
+            f"AUC-ROC suspeito ({auc:.4f}) acima de {MAX_AUC_WITHOUT_LEAKAGE:.2f}; possivel leakage."
+        )
 
 
 def _split_columns(x):
@@ -120,6 +133,7 @@ def train_all_models(
             ]
         )
         scores = cross_val_score(pipeline, x, y, cv=cv, scoring="f1_macro", n_jobs=1)
+        assert_metrics_not_suspicious(f1_macro=scores.mean())
         rows.append(
             {
                 "model": name,
@@ -128,6 +142,7 @@ def train_all_models(
             }
         )
 
+    audit_features_used(x.columns)
     comparison = pd.DataFrame(rows).sort_values("f1_macro_mean", ascending=False)
     comparison.to_csv(output_path, index=False)
     print(comparison.to_string(index=False))

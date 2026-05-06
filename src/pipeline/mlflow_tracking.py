@@ -1,6 +1,5 @@
 import os
 import time
-from importlib.machinery import SourceFileLoader
 
 import mlflow
 import mlflow.sklearn
@@ -17,19 +16,12 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
-try:
-    from src.pipeline.preprocessor import build_preprocessor
-    from src.pipeline.train_classifier import check_leakage
-except ModuleNotFoundError:
-    pipeline_dir = os.path.dirname(__file__)
-    build_preprocessor = SourceFileLoader(
-        "preprocessor",
-        os.path.join(pipeline_dir, "preprocessor.py"),
-    ).load_module().build_preprocessor
-    check_leakage = SourceFileLoader(
-        "train_classifier",
-        os.path.join(pipeline_dir, "train_classifier.py"),
-    ).load_module().check_leakage
+from src.pipeline.preprocessor import build_preprocessor
+from src.pipeline.train_classifier import (
+    assert_metrics_not_suspicious,
+    audit_features_used,
+    check_leakage,
+)
 
 
 RANDOM_STATE = 42
@@ -248,6 +240,8 @@ def register_perfil_classifier(
         pipeline.fit(x_train, y_train)
         predictions = pipeline.predict(x_test)
         f1_macro = f1_score(y_test, predictions, average="macro")
+        assert_metrics_not_suspicious(f1_macro=f1_macro)
+        audit_features_used(x_train.columns)
 
         with mlflow.start_run(run_name=run_name) as run:
             mlflow.log_param("model", run_name)
@@ -310,6 +304,8 @@ def register_churn_classifier(
     model.fit(x_train, y_train)
     y_score = model.predict_proba(x_test)[:, 1]
     auc = roc_auc_score(y_test, y_score)
+    assert_metrics_not_suspicious(auc=auc)
+    audit_features_used(x_train.columns)
 
     with mlflow.start_run(run_name="RandomForest_calibrated"):
         mlflow.log_param("model", "RandomForest_calibrated")

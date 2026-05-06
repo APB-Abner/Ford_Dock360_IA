@@ -19,6 +19,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
 N_ESTIMATORS = 200
+MAX_F1_MACRO_WITHOUT_LEAKAGE = 0.92
+MAX_AUC_WITHOUT_LEAKAGE = 0.95
 
 LEAKAGE_COLS = [
     "fez_primeira_revisao_rede",
@@ -40,6 +42,24 @@ def check_leakage(x):
     found = [col for col in LEAKAGE_COLS if col in x.columns]
     if found:
         raise ValueError(f"Colunas com data leakage em X: {found}")
+
+
+def audit_features_used(feature_names):
+    found = [col for col in LEAKAGE_COLS if col in feature_names]
+    if found:
+        raise ValueError(f"Auditoria pos-treino encontrou leakage em features: {found}")
+    print("Auditoria pos-treino: nenhuma coluna proibida em X.")
+
+
+def assert_metrics_not_suspicious(f1_macro=None, auc=None):
+    if f1_macro is not None and f1_macro > MAX_F1_MACRO_WITHOUT_LEAKAGE:
+        raise AssertionError(
+            f"F1 Macro suspeito ({f1_macro:.4f}) acima de {MAX_F1_MACRO_WITHOUT_LEAKAGE:.2f}; possivel leakage."
+        )
+    if auc is not None and auc > MAX_AUC_WITHOUT_LEAKAGE:
+        raise AssertionError(
+            f"AUC-ROC suspeito ({auc:.4f}) acima de {MAX_AUC_WITHOUT_LEAKAGE:.2f}; possivel leakage."
+        )
 
 
 def _load_csv(path):
@@ -155,6 +175,8 @@ def train_churn_model(
     auc = roc_auc_score(y_test, y_score)
 
     print(f"AUC-ROC teste: {auc:.4f}")
+    assert_metrics_not_suspicious(auc=auc)
+    audit_features_used(x.columns)
     if auc < 0.70:
         print("AUC-ROC abaixo da meta >= 0.70 para os dados atuais.")
 
