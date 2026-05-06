@@ -107,12 +107,7 @@ def _make_classifier_pipeline(x, model):
     )
 
 
-def _promote_latest_version(client, model_name, stage="Production"):
-    latest = client.get_latest_versions(model_name)
-    if not latest:
-        raise ValueError(f"Modelo registrado sem versoes: {model_name}")
-
-    version = max(latest, key=lambda item: int(item.version)).version
+def _promote_version(client, model_name, version, stage="Production"):
     client.transition_model_version_stage(
         name=model_name,
         version=version,
@@ -241,15 +236,16 @@ def register_perfil_classifier(
 
         print(f"{run_name} f1_macro_test={f1_macro:.4f}", flush=True)
 
-    with mlflow.start_run(run_id=best["run_id"]):
+    with mlflow.start_run(run_id=best["run_id"]) as run:
         mlflow.sklearn.log_model(
             best["pipeline"],
             artifact_path="model",
-            registered_model_name=model_name,
         )
+        model_uri = f"runs:/{run.info.run_id}/model"
+        mv = mlflow.register_model(model_uri, model_name)
+        version = mv.version
 
-    time.sleep(1)
-    version = _promote_latest_version(client, model_name)
+    _promote_version(client, model_name, version)
     print(f"{model_name} versao {version} promovido para Production")
     return pd.DataFrame(rows), version
 
@@ -290,17 +286,18 @@ def register_churn_classifier(
     assert_metrics_not_suspicious(auc=auc)
     audit_features_used(x_train.columns)
 
-    with mlflow.start_run(run_name="RandomForest_calibrated"):
+    with mlflow.start_run(run_name="RandomForest_calibrated") as run:
         mlflow.log_param("model", "RandomForest_calibrated")
         mlflow.log_metric("auc_roc_test", auc)
         mlflow.sklearn.log_model(
             model,
             artifact_path="model",
-            registered_model_name=model_name,
         )
+        model_uri = f"runs:/{run.info.run_id}/model"
+        mv = mlflow.register_model(model_uri, model_name)
+        version = mv.version
 
-    time.sleep(1)
-    version = _promote_latest_version(client, model_name)
+    _promote_version(client, model_name, version)
     print(f"RandomForest_calibrated auc_roc_test={auc:.4f}")
     print(f"{model_name} versao {version} promovido para Production")
     return auc, version
