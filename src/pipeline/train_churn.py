@@ -2,15 +2,27 @@ import matplotlib
 matplotlib.use("Agg")
 
 import os
+import tempfile
 
 import joblib
+import mlflow
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import PrecisionRecallDisplay, roc_auc_score
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    PrecisionRecallDisplay,
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -100,6 +112,15 @@ def _build_preprocessor(numeric_cols, categorical_cols):
     )
 
 
+def _metrics_at_threshold(y_test, y_score, threshold):
+    y_pred = (y_score >= threshold).astype(int)
+    return {
+        f"precision_t{int(threshold * 100)}": precision_score(y_test, y_pred, zero_division=0),
+        f"recall_t{int(threshold * 100)}": recall_score(y_test, y_pred, zero_division=0),
+        f"f1_macro_t{int(threshold * 100)}": f1_score(y_test, y_pred, average="macro", zero_division=0),
+    }
+
+
 def train_churn_model(
     features_path="data/raw/ford_clientes_operacional_compra.csv",
     target_path="data/raw/ford_clientes_historico_completo.csv",
@@ -159,22 +180,53 @@ def train_churn_model(
 
     model.fit(x_train, y_train)
     y_score = model.predict_proba(x_test)[:, 1]
+    y_pred = model.predict(x_test)
+
     auc = roc_auc_score(y_test, y_score)
+    pr_auc = average_precision_score(y_test, y_score)
+    f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
 
     print(f"AUC-ROC teste: {auc:.4f}")
-    assert_metrics_not_suspicious(auc=auc)
+    print(f"PR-AUC teste: {pr_auc:.4f}")
+    print(f"F1-Macro teste: {f1_macro:.4f}")
+    assert_metrics_not_suspicious(f1_macro=f1_macro, auc=auc)
     audit_features_used(x.columns)
     if auc < 0.70:
         print("AUC-ROC abaixo da meta >= 0.70 para os dados atuais.")
 
+    pr_curve_path = f"{report_path}.png"
     PrecisionRecallDisplay.from_predictions(y_test, y_score)
     plt.title("Precision-Recall Churn")
-    plt.savefig(report_path, format="png", dpi=150, bbox_inches="tight")
+    plt.savefig(pr_curve_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    cm = confusion_matrix(y_test, y_pred)
+    cm_path = "reports/confusion_matrix_churn.png"
+    ConfusionMatrixDisplay(confusion_matrix=cm).plot()
+    plt.title("Confusion Matrix Churn")
+    plt.savefig(cm_path, dpi=150, bbox_inches="tight")
     plt.close()
 
     joblib.dump(model, model_path, compress=3)
-    print(f"Precision-Recall curve salva em {report_path}")
+    print(f"Precision-Recall curve salva em {pr_curve_path}")
     print(f"Modelo salvo em {model_path}")
+
+    with mlflow.start_run():
+        mlflow.log_param("n_estimators", N_ESTIMATORS)
+        mlflow.log_param("test_size", TEST_SIZE)
+        mlflow.log_param("random_state", RANDOM_STATE)
+
+        mlflow.log_metric("auc_roc", auc)
+        mlflow.log_metric("pr_auc", pr_auc)
+        mlflow.log_metric("f1_macro", f1_macro)
+
+        for threshold in [0.3, 0.5, 0.7]:
+            for name, value in _metrics_at_threshold(y_test, y_score, threshold).items():
+                mlflow.log_metric(name, value)
+
+        mlflow.log_artifact(pr_curve_path)
+        mlflow.log_artifact(cm_path)
+        mlflow.log_artifact(model_path)
 
     return model, auc
 
