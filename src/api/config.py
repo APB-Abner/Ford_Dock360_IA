@@ -9,6 +9,9 @@ EXAMPLE_SECRET_KEY = "changeme-local-only"
 
 class Settings(BaseSettings):
     SECRET_KEY: str
+    JWT_ISSUER: str = "ford-vinguard-api"
+    JWT_AUDIENCE: str = "ford-vinguard-api"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     # Paths (defaults relative to workspace root)
     DATA_PATH: str = "data/raw/ford_complaints_top3_por_modelo.csv"
