@@ -170,6 +170,7 @@ def train_churn_model(
         method="isotonic",
     )
 
+    # Limitacao: split aleatorio — Base 1 sem coluna temporal. Split por safra seria necessario em producao.
     x_train, x_test, y_train, y_test = train_test_split(
         x,
         y,
