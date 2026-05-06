@@ -1,12 +1,15 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from src.api.config import (
+    EXAMPLE_SECRET_KEY,
+    MIN_SECRET_KEY_LENGTH,
+    Settings,
+    settings,
+    validate_secret_key,
+)
 
-class Settings(BaseSettings):
-    SECRET_KEY: str = "MUST_BE_SET_IN_ENVIRONMENT"
-    
-    # Paths (defaults relative to workspace root)
-    DATA_PATH: str = "data/raw/ford_complaints_top3_por_modelo.csv"
-    MODELS_DIR: str = "models"
-    
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-settings = Settings()
+__all__ = [
+    "EXAMPLE_SECRET_KEY",
+    "MIN_SECRET_KEY_LENGTH",
+    "Settings",
+    "settings",
+    "validate_secret_key",
+]
