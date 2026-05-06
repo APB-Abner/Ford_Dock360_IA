@@ -1,9 +1,9 @@
-import os
+import hashlib
+import hmac
 from pathlib import Path
 import joblib
 import pandas as pd
 from fastapi import HTTPException
-from app.config import settings
 from app.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
 
 try:
@@ -19,6 +19,50 @@ _ACOES = {
     "fiel": "Nenhuma acao ativa. Registrar para agradecimento apos proxima revisao.",
 }
 
+MODELS_DIR = Path(__file__).resolve().parents[3] / "models"
+EXPECTED_SHA256 = {
+    "churn_rf_calibrated.joblib": "72b20520a269f8c7d867f034832b61c5ad1534710910ba410a8cdb457a411a14",
+}
+
+
+def _alert(message):
+    print(f"ALERTA SEGURANCA: {message}")
+
+
+def _ensure_models_read_only():
+    if not MODELS_DIR.exists():
+        raise HTTPException(status_code=503, detail=f"Diretorio de modelos nao encontrado: {MODELS_DIR}")
+
+    paths = [MODELS_DIR] + list(MODELS_DIR.glob("*.joblib"))
+    for path in paths:
+        mode = path.stat().st_mode
+        if mode & 0o222:
+            try:
+                path.chmod(mode & ~0o222)
+            except OSError as exc:
+                _alert(f"falha ao remover permissao de escrita de {path}: {exc}")
+                raise HTTPException(status_code=503, detail="Diretorio de modelos nao esta read-only") from exc
+
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_checksum(path):
+    expected = EXPECTED_SHA256.get(path.name)
+    if expected is None:
+        _alert(f"checksum SHA256 nao cadastrado para {path}")
+        raise HTTPException(status_code=503, detail="Checksum SHA256 do modelo nao cadastrado")
+
+    actual = _sha256(path)
+    if not hmac.compare_digest(actual, expected):
+        _alert(f"checksum SHA256 invalido para {path}")
+        raise HTTPException(status_code=503, detail="Checksum SHA256 do modelo invalido")
+
 
 class PredictorService:
     _instance = None
@@ -32,14 +76,15 @@ class PredictorService:
         return cls._instance
 
     def _model_path(self, filename):
-        env_key = "MODEL_PATH_" + filename.upper().replace(".", "_").replace("-", "_")
-        return Path(os.environ.get(env_key, Path(settings.MODELS_DIR) / filename))
+        return MODELS_DIR / filename
 
     def _load_churn(self):
         if self.model_churn is None:
             path = self._model_path("churn_rf_calibrated.joblib")
             if not path.exists():
                 raise HTTPException(status_code=503, detail=f"Modelo churn nao encontrado: {path}")
+            _ensure_models_read_only()
+            _verify_checksum(path)
             self.model_churn = joblib.load(path)
             self.feature_names = list(getattr(self.model_churn, "feature_names_in_", []))
         return self.model_churn
@@ -48,6 +93,8 @@ class PredictorService:
         if self.model_perfil is None:
             path = self._model_path("perfil_rf_classifier.joblib")
             if path.exists():
+                _ensure_models_read_only()
+                _verify_checksum(path)
                 self.model_perfil = joblib.load(path)
         return self.model_perfil
 
