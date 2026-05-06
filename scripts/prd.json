@@ -36,8 +36,7 @@
         "Adicionar ao relatorio de Cybersecurity a arquitetura alvo com OIDC/Vault como roadmap",
         "python -m py_compile src/api/config.py"
       ],
-      "notes": "Skipped: exceeded 5 attempts without passing",
-      "skipped": true
+      "notes": "Skipped: exceeded 5 attempts without passing"
     },
     {
       "id": "US-020",
@@ -213,8 +212,7 @@
         "Rodar pip install -r requirements.txt em container limpo para validar",
         "python -m py_compile src/api/config.py apos instalacao limpa"
       ],
-      "notes": "Skipped: exceeded 5 attempts",
-      "skipped": true
+      "notes": "Skipped: exceeded 5 attempts"
     },
     {
       "id": "US-028",
@@ -281,8 +279,7 @@
         "Criar tests/test_no_model.py — valida que API retorna 503 se .joblib ausente",
         "pytest tests/ passa com 5/5 testes OK"
       ],
-      "notes": "Skipped: exceeded 5 attempts",
-      "skipped": true
+      "notes": "Skipped: exceeded 5 attempts"
     },
     {
       "id": "US-030",
@@ -466,8 +463,7 @@
         "bash -n scripts/check-sandbox.sh de sintaxe"
       ],
       "notes": "Skipped: exceeded 5 attempts",
-      "fix": "env | grep -E '(SECRET|TOKEN|KEY|DATABASE)' | sed 's/=.*/=***REDACTED***/' ",
-      "skipped": true
+      "fix": "env | grep -E '(SECRET|TOKEN|KEY|DATABASE)' | sed 's/=.*/=***REDACTED***/' "
     },
     {
       "id": "US-016",
@@ -483,8 +479,7 @@
         "visualizations.py e mlflow_tracking.py substituem SourceFileLoader por imports diretos",
         "python -m py_compile dos tres arquivos"
       ],
-      "notes": "Skipped: exceeded 5 attempts",
-      "skipped": true
+      "notes": "Skipped: exceeded 5 attempts"
     },
     {
       "id": "US-006",

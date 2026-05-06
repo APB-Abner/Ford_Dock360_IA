@@ -110,8 +110,8 @@ run_with_provider() {
 
 is_rate_limited() {
   grep -qi \
-    "rate.limit\|quota.exceeded\|too.many.requests\|usage.limit\|limit.reached\|No capacity\|hit your usage\|upgrade to pro\|credits" \
-    "$RUN_LOG" 2>/dev/null
+    "rate.limit\|quota.exceeded\|too.many.requests\|usage.limit\|limit.reached\|No capacity\|hit your usage\|upgrade to pro" \
+    "$LAST_MESSAGE_FILE" 2>/dev/null
 }
 
 # ── Security check ────────────────────────────────────────────────────────────
@@ -435,6 +435,8 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     "$STORY_CRITERIA" "$STORY_NOTES" "$STORY_FIX" \
     "$STORY_DISCIPLINE" > "$PROMPT_FILE"
 
+  ITER_LOG="$SCRIPT_DIR/.iter.log"
+  > "$ITER_LOG"
   run_with_provider "$ACTIVE_PROVIDER" "$PROMPT_FILE" "$LAST_MESSAGE_FILE"
 
   # Detecta rate limit e tenta próximo provider automaticamente
@@ -445,7 +447,9 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
       ACTIVE_PROVIDER="$NEXT"
       echo "Retrying with $ACTIVE_PROVIDER..."
       > "$LAST_MESSAGE_FILE"
-      run_with_provider "$ACTIVE_PROVIDER" "$PROMPT_FILE" "$LAST_MESSAGE_FILE"
+      ITER_LOG="$SCRIPT_DIR/.iter.log"
+  > "$ITER_LOG"
+  run_with_provider "$ACTIVE_PROVIDER" "$PROMPT_FILE" "$LAST_MESSAGE_FILE"
     fi
   fi
 
