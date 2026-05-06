@@ -6,17 +6,19 @@ import mlflow.sklearn
 import pandas as pd
 from mlflow.tracking import MlflowClient
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score, roc_auc_score, silhouette_score
+from sklearn.metrics import adjusted_rand_score, f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
 
 from src.pipeline.config import LEAKAGE_COLUMNS
+from src.pipeline.clustering import (
+    MIN_ACCEPTANCE_ARI,
+    MIN_ACCEPTANCE_SILHOUETTE,
+    _evaluate_k_candidates,
+)
 from src.pipeline.preprocessor import build_preprocessor
 from src.pipeline.train_classifier import (
     assert_metrics_not_suspicious,
@@ -55,16 +57,6 @@ def _split_columns(x):
             numeric_cols.append(col)
 
     return numeric_cols, categorical_cols, binary_cols
-
-
-def _make_kmeans_pipeline(k):
-    return Pipeline(
-        [
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-            ("kmeans", KMeans(n_clusters=k, random_state=RANDOM_STATE)),
-        ]
-    )
 
 
 def _load_perfil_data(input_path, target_col):
@@ -143,27 +135,41 @@ def register_kmeans_experiment(
         raise ValueError(f"Colunas ausentes para clustering: {missing}")
 
     x = df[SEGMENTATION_FEATURE_COLS]
+    candidate_rows, best = _evaluate_k_candidates(x, len(df))
+
     rows = []
+    for row in candidate_rows:
+        with mlflow.start_run(run_name=f"kmeans_k_{row['k']}"):
+            mlflow.log_param("k", row["k"])
+            mlflow.log_metric("silhouette_score", row["silhouette_score"])
+            mlflow.log_metric("inertia", row["inertia"])
 
-    for k in range(2, 9):
-        pipeline = _make_kmeans_pipeline(k)
-        labels = pipeline.fit_predict(x)
-        x_scaled = pipeline[:-1].transform(x)
-        silhouette = silhouette_score(
-            x_scaled,
-            labels,
-            sample_size=min(10000, len(df)),
-            random_state=RANDOM_STATE,
+        rows.append(
+            {
+                "k": row["k"],
+                "silhouette_score": row["silhouette_score"],
+                "inertia": row["inertia"],
+            }
         )
-        inertia = pipeline.named_steps["kmeans"].inertia_
 
-        with mlflow.start_run(run_name=f"kmeans_k_{k}"):
-            mlflow.log_param("k", k)
-            mlflow.log_metric("silhouette_score", silhouette)
-            mlflow.log_metric("inertia", inertia)
+    ari = None
+    if "perfil_latente" in df.columns:
+        ari = adjusted_rand_score(df["perfil_latente"], best["labels"])
+        print(f"ARI vs perfil_latente: {ari:.4f}", flush=True)
+        if ari <= MIN_ACCEPTANCE_ARI or best["silhouette_score"] <= MIN_ACCEPTANCE_SILHOUETTE:
+            print(
+                "ALERTA: criterio minimo de aceite nao atendido "
+                f"(ARI={ari:.4f}, silhouette={best['silhouette_score']:.4f}); abortando clustering",
+                flush=True,
+            )
+            raise ValueError("ARI/Silhouette insuficientes para aceitar labels de clustering")
 
-        rows.append({"k": k, "silhouette_score": silhouette, "inertia": inertia})
-        print(f"k={k} silhouette_score={silhouette:.4f} inertia={inertia:.2f}", flush=True)
+    with mlflow.start_run(run_name="kmeans_selected_k"):
+        mlflow.log_param("selected_k", best["k"])
+        mlflow.log_metric("selected_silhouette_score", best["silhouette_score"])
+        mlflow.log_metric("selected_inertia", best["inertia"])
+        if ari is not None:
+            mlflow.log_metric("ari_perfil_latente", ari)
 
     return pd.DataFrame(rows)
 
