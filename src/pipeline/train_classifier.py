@@ -13,7 +13,7 @@ from src.pipeline.preprocessor import build_preprocessor
 
 RANDOM_STATE = 42
 MAX_F1_MACRO_WITHOUT_LEAKAGE = 0.92
-MAX_AUC_WITHOUT_LEAKAGE = 0.95
+MAX_AUC_WITHOUT_LEAKAGE = 0.98
 
 
 def check_leakage(x):

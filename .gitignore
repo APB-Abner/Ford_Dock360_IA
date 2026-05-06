@@ -27,3 +27,4 @@ __pycache__/
 # Dev environment caches
 /.cache/
 /.npm-global/
+.env
