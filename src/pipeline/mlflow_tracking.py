@@ -16,6 +16,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
+from src.pipeline.config import LEAKAGE_COLUMNS
 from src.pipeline.preprocessor import build_preprocessor
 from src.pipeline.train_classifier import (
     assert_metrics_not_suspicious,
@@ -28,18 +29,7 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.20
 TRACKING_URI = "file:./mlruns"
 
-SEGMENTATION_FEATURE_COLS = [
-    "fez_primeira_revisao_rede",
-    "meses_ate_primeira_revisao",
-    "perdeu_primeira_revisao",
-    "voltou_tarde_revoltado",
-    "trouxe_oleo_externo",
-    "pede_desconto_revisao",
-    "sensibilidade_desconto_pos",
-    "qtde_revisoes_24m",
-    "share_revisoes_rede_24m",
-    "gasto_manutencao_rede_24m",
-]
+SEGMENTATION_FEATURE_COLS = [col for col in LEAKAGE_COLUMNS if col != "churn_rede_24m"]
 
 
 def setup_mlflow(tracking_uri=TRACKING_URI):
@@ -83,20 +73,7 @@ def _load_perfil_data(input_path, target_col):
         raise ValueError(f"Coluna target ausente: {target_col}")
 
     drop_cols = ["id_cliente", "cliente_id", "modelo_veiculo", target_col]
-    drop_cols += [
-        "fez_primeira_revisao_rede",
-        "meses_ate_primeira_revisao",
-        "perdeu_primeira_revisao",
-        "voltou_tarde_revoltado",
-        "trouxe_oleo_externo",
-        "pede_desconto_revisao",
-        "sensibilidade_desconto_pos",
-        "qtde_revisoes_24m",
-        "share_revisoes_rede_24m",
-        "gasto_manutencao_rede_24m",
-        "satisfacao_marca_24m",
-        "churn_rede_24m",
-    ]
+    drop_cols += [col for col in LEAKAGE_COLUMNS if col != target_col]
 
     y = df[target_col]
     x = df.drop(columns=[col for col in drop_cols if col in df.columns])

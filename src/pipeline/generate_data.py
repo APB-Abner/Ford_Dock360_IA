@@ -3,23 +3,10 @@ import os
 import numpy as np
 import pandas as pd
 
+from src.pipeline.config import LEAKAGE_COLUMNS
+
 
 RANDOM_STATE = 42
-
-POST_COMPRA_COLS = [
-    "fez_primeira_revisao_rede",
-    "meses_ate_primeira_revisao",
-    "perdeu_primeira_revisao",
-    "voltou_tarde_revoltado",
-    "trouxe_oleo_externo",
-    "pede_desconto_revisao",
-    "sensibilidade_desconto_pos",
-    "qtde_revisoes_24m",
-    "share_revisoes_rede_24m",
-    "gasto_manutencao_rede_24m",
-    "satisfacao_marca_24m",
-    "churn_rede_24m",
-]
 
 
 def _make_rng(random_state):
@@ -191,7 +178,7 @@ def generate_base1(n_rows=500000, random_state=RANDOM_STATE):
 
 
 def check_leakage(x):
-    vazamentos = [col for col in POST_COMPRA_COLS if col in x.columns]
+    vazamentos = [col for col in LEAKAGE_COLUMNS if col in x.columns]
     if vazamentos:
         raise ValueError(f"Colunas com data leakage em X: {vazamentos}")
 

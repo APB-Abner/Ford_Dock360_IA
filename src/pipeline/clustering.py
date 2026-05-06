@@ -12,22 +12,12 @@ from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from src.pipeline.config import LEAKAGE_COLUMNS
+
 
 RANDOM_STATE = 42
 
-FEATURE_COLS = [
-    "fez_primeira_revisao_rede",
-    "meses_ate_primeira_revisao",
-    "perdeu_primeira_revisao",
-    "voltou_tarde_revoltado",
-    "trouxe_oleo_externo",
-    "pede_desconto_revisao",
-    "sensibilidade_desconto_pos",
-    "qtde_revisoes_24m",
-    "share_revisoes_rede_24m",
-    "gasto_manutencao_rede_24m",
-    "satisfacao_marca_24m",
-]
+FEATURE_COLS = [col for col in LEAKAGE_COLUMNS if col != "churn_rede_24m"]
 
 PERFIS = ["fiel", "economico", "abandono", "esquecido"]
 

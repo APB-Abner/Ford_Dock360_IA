@@ -15,6 +15,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from src.pipeline.config import LEAKAGE_COLUMNS
+
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
@@ -22,30 +24,15 @@ N_ESTIMATORS = 200
 MAX_F1_MACRO_WITHOUT_LEAKAGE = 0.92
 MAX_AUC_WITHOUT_LEAKAGE = 0.95
 
-LEAKAGE_COLS = [
-    "fez_primeira_revisao_rede",
-    "meses_ate_primeira_revisao",
-    "perdeu_primeira_revisao",
-    "voltou_tarde_revoltado",
-    "trouxe_oleo_externo",
-    "pede_desconto_revisao",
-    "sensibilidade_desconto_pos",
-    "qtde_revisoes_24m",
-    "share_revisoes_rede_24m",
-    "gasto_manutencao_rede_24m",
-    "satisfacao_marca_24m",
-    "churn_rede_24m",
-]
-
 
 def check_leakage(x):
-    found = [col for col in LEAKAGE_COLS if col in x.columns]
+    found = [col for col in LEAKAGE_COLUMNS if col in x.columns]
     if found:
         raise ValueError(f"Colunas com data leakage em X: {found}")
 
 
 def audit_features_used(feature_names):
-    found = [col for col in LEAKAGE_COLS if col in feature_names]
+    found = [col for col in LEAKAGE_COLUMNS if col in feature_names]
     if found:
         raise ValueError(f"Auditoria pos-treino encontrou leakage em features: {found}")
     print("Auditoria pos-treino: nenhuma coluna proibida em X.")

@@ -7,6 +7,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 
+from src.pipeline.config import LEAKAGE_COLUMNS, LEAKAGE_COLUMNS as LEAKAGE_COLS
 from src.pipeline.preprocessor import build_preprocessor
 
 
@@ -14,30 +15,15 @@ RANDOM_STATE = 42
 MAX_F1_MACRO_WITHOUT_LEAKAGE = 0.92
 MAX_AUC_WITHOUT_LEAKAGE = 0.95
 
-LEAKAGE_COLS = [
-    "fez_primeira_revisao_rede",
-    "meses_ate_primeira_revisao",
-    "perdeu_primeira_revisao",
-    "voltou_tarde_revoltado",
-    "trouxe_oleo_externo",
-    "pede_desconto_revisao",
-    "sensibilidade_desconto_pos",
-    "qtde_revisoes_24m",
-    "share_revisoes_rede_24m",
-    "gasto_manutencao_rede_24m",
-    "satisfacao_marca_24m",
-    "churn_rede_24m",
-]
-
 
 def check_leakage(x):
-    found = [col for col in LEAKAGE_COLS if col in x.columns]
+    found = [col for col in LEAKAGE_COLUMNS if col in x.columns]
     if found:
         raise ValueError(f"Colunas com data leakage em X: {found}")
 
 
 def audit_features_used(feature_names):
-    found = [col for col in LEAKAGE_COLS if col in feature_names]
+    found = [col for col in LEAKAGE_COLUMNS if col in feature_names]
     if found:
         raise ValueError(f"Auditoria pos-treino encontrou leakage em features: {found}")
     print("Auditoria pos-treino: nenhuma coluna proibida em X.")
@@ -92,7 +78,7 @@ def train_all_models(
         raise ValueError(f"Coluna target ausente: {target_col}")
 
     drop_cols = ["id_cliente", "cliente_id", "modelo_veiculo", target_col]
-    drop_cols += [col for col in LEAKAGE_COLS if col != target_col]
+    drop_cols += [col for col in LEAKAGE_COLUMNS if col != target_col]
 
     y = df[target_col]
     x = df.drop(columns=[col for col in drop_cols if col in df.columns])
