@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RoleEnum(str, Enum):
@@ -36,4 +36,4 @@ class PredictResponse(BaseModel):
 
 
 class BatchPredictRequest(BaseModel):
-    items: list[PredictRequest]
+    items: list[PredictRequest] = Field(..., max_length=500)

@@ -2,7 +2,6 @@ import matplotlib
 matplotlib.use("Agg")
 
 import os
-from importlib.machinery import SourceFileLoader
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -12,21 +11,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 
-try:
-    from src.pipeline.preprocessor import build_preprocessor
-    from src.pipeline.train_classifier import LEAKAGE_COLS, check_leakage
-except ModuleNotFoundError:
-    base_dir = os.path.dirname(__file__)
-    build_preprocessor = SourceFileLoader(
-        "preprocessor",
-        os.path.join(base_dir, "preprocessor.py"),
-    ).load_module().build_preprocessor
-    train_classifier = SourceFileLoader(
-        "train_classifier",
-        os.path.join(base_dir, "train_classifier.py"),
-    ).load_module()
-    LEAKAGE_COLS = train_classifier.LEAKAGE_COLS
-    check_leakage = train_classifier.check_leakage
+from src.pipeline.preprocessor import build_preprocessor
+from src.pipeline.train_classifier import LEAKAGE_COLS, check_leakage
 
 
 RANDOM_STATE = 42
@@ -76,7 +62,6 @@ def _split_columns(x):
 
 def _load_data(input_path, target_col):
     df = pd.read_csv(input_path)
-    df = _add_plano_manutencao(df)
 
     drop_cols = ["id_cliente", "cliente_id", "modelo_veiculo", target_col]
     drop_cols += [col for col in LEAKAGE_COLS if col != target_col]
@@ -84,6 +69,7 @@ def _load_data(input_path, target_col):
     y = df[target_col]
     x = df.drop(columns=[col for col in drop_cols if col in df.columns])
     check_leakage(x)
+    x = _add_plano_manutencao(x)
     return x, y
 
 

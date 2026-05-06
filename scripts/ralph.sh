@@ -1,14 +1,17 @@
 #!/bin/bash
-# Ralph Audit Loop (OpenAI Codex) - Long-running autonomous *read-only* audit loop.
-# Usage: ./ralph.sh [max_iterations] [--skip-security-check] [--no-search]
+# Ralph Implementation Loop (OpenAI Codex) - Autonomous implementation loop.
+# Reads scripts/prd.json and implements each US with passes: false.
+# Marks passes: true when py_compile and acceptance criteria pass.
 #
-# Writes all artifacts under `.codex/ralph-audit/` (PRD state, logs, and audit reports).
+# Usage: ./scripts/ralph.sh [max_iterations] [--skip-security-check] [--no-search]
+#
+# Writes all artifacts under scripts/audit/ (logs and implementation reports).
 
 set -euo pipefail
 
 export CODEX_INTERNAL_ORIGINATOR_OVERRIDE="Codex Desktop"
 
-MAX_ITERATIONS=20
+MAX_ITERATIONS=40
 MAX_ATTEMPTS_PER_STORY="${MAX_ATTEMPTS_PER_STORY:-5}"
 SKIP_SECURITY="${SKIP_SECURITY_CHECK:-false}"
 ENABLE_SEARCH="true"
@@ -54,6 +57,10 @@ if [[ "$SKIP_SECURITY" != "true" ]]; then
     SECURITY_WARNINGS+=("DATABASE_URL is set - database credentials may be exposed")
   fi
 
+  if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+    SECURITY_WARNINGS+=("OPENAI_API_KEY is set - will be used for Codex calls")
+  fi
+
   if [[ ${#SECURITY_WARNINGS[@]} -gt 0 ]]; then
     echo "WARNING: Potential credential exposure detected:"
     echo ""
@@ -61,15 +68,10 @@ if [[ "$SKIP_SECURITY" != "true" ]]; then
       echo "  - $warning"
     done
     echo ""
-    echo "Running an autonomous agent with these credentials set could expose"
-    echo "them in logs, commit messages, or API calls."
-    echo ""
-    echo "See your repo's security docs for sandboxing guidance."
-    echo ""
     read -p "Continue anyway? (y/N) " -n 1 -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      echo "Aborted. Unset credentials or use --skip-security-check to bypass."
+      echo "Aborted. Use --skip-security-check to bypass."
       exit 1
     fi
   else
@@ -85,7 +87,6 @@ PRD_FILE="$SCRIPT_DIR/prd.json"
 RUN_LOG="$SCRIPT_DIR/run.log"
 EVENT_LOG="$SCRIPT_DIR/events.log"
 MODEL_CHECK_LOG="$SCRIPT_DIR/.model-check.log"
-PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
 
 mkdir -p "$SCRIPT_DIR/audit"
 
@@ -96,10 +97,13 @@ if [ ! -f "$ATTEMPTS_FILE" ]; then
   echo "{}" > "$ATTEMPTS_FILE"
 fi
 
+if [ ! -f "$PRD_FILE" ]; then
+  echo "ERROR: $PRD_FILE not found. Copy prd.json to scripts/prd.json before running."
+  exit 1
+fi
+
 get_current_story() {
-  if [ -f "$PRD_FILE" ]; then
-    jq -r '.userStories[] | select(.passes == false) | .id' "$PRD_FILE" 2>/dev/null | head -1
-  fi
+  jq -r '.userStories[] | select(.passes == false) | .id' "$PRD_FILE" 2>/dev/null | head -1
 }
 
 get_story_attempts() {
@@ -131,16 +135,15 @@ mark_story_skipped() {
         end
     ]
   ' "$PRD_FILE" > "$PRD_FILE.tmp" && mv "$PRD_FILE.tmp" "$PRD_FILE"
-  echo "Circuit breaker: Marked story $story_id as skipped after $max_attempts attempts"
+  echo "Circuit breaker: Marked $story_id as skipped after $max_attempts attempts"
 }
 
 check_circuit_breaker() {
   local story_id="$1"
   local attempts
   attempts=$(get_story_attempts "$story_id")
-
   if [ "$attempts" -ge "$MAX_ATTEMPTS_PER_STORY" ]; then
-    echo "Circuit breaker: Story $story_id has reached max attempts ($attempts/$MAX_ATTEMPTS_PER_STORY)"
+    echo "Circuit breaker: $story_id reached max attempts ($attempts/$MAX_ATTEMPTS_PER_STORY)"
     mark_story_skipped "$story_id" "$MAX_ATTEMPTS_PER_STORY"
     return 0
   fi
@@ -155,32 +158,68 @@ log_event() {
   echo "[$(ts)] $*" >> "$EVENT_LOG"
 }
 
-get_story_title() {
+get_story_field() {
   local story_id="$1"
-  jq -r --arg id "$story_id" '.userStories[] | select(.id == $id) | .title' "$PRD_FILE" 2>/dev/null || true
+  local field="$2"
+  jq -r --arg id "$story_id" --arg f "$field" \
+    '.userStories[] | select(.id == $id) | .[$f] // ""' "$PRD_FILE" 2>/dev/null || true
 }
 
-get_story_description() {
+get_story_acceptance_criteria() {
   local story_id="$1"
-  jq -r --arg id "$story_id" '.userStories[] | select(.id == $id) | .description' "$PRD_FILE" 2>/dev/null || true
+  jq -r --arg id "$story_id" \
+    '.userStories[] | select(.id == $id) | .acceptanceCriteria[]' "$PRD_FILE" 2>/dev/null || true
 }
 
-get_story_notes() {
+get_story_fix() {
   local story_id="$1"
-  jq -r --arg id "$story_id" '.userStories[] | select(.id == $id) | (.notes // "")' "$PRD_FILE" 2>/dev/null || true
+  jq -r --arg id "$story_id" \
+    '.userStories[] | select(.id == $id) | .fix // ""' "$PRD_FILE" 2>/dev/null || true
 }
 
-get_story_output_relpath() {
+run_acceptance_checks() {
   local story_id="$1"
-  # Extract the target output file from acceptance criteria, e.g.:
-  # "Created .codex/ralph-audit/audit/01-api-routes.md with ALL findings"
-  jq -r --arg id "$story_id" '
-    .userStories[]
-    | select(.id == $id)
-    | .acceptanceCriteria[]
-    | select(test("^Created "))
-    | split(" ")[1]
-  ' "$PRD_FILE" 2>/dev/null | head -n 1
+  local failed=0
+
+  echo "Running acceptance checks for $story_id..."
+
+  while IFS= read -r criterion; do
+    if [[ "$criterion" == python\ -m\ py_compile* ]]; then
+      clean="${criterion% passa sem erros}"
+      clean="${clean% Typecheck passes}"
+      files="${clean#python -m py_compile }"
+      if python3 -m py_compile $files 2>/dev/null; then
+        echo "  OK: $criterion"
+      else
+        echo "  FAIL: $criterion"
+        failed=1
+      fi
+    elif [[ "$criterion" == pytest* ]]; then
+      if cd "$REPO_ROOT" && $criterion > /dev/null 2>&1; then
+        echo "  OK: $criterion"
+      else
+        echo "  FAIL: $criterion"
+        failed=1
+      fi
+    elif [[ "$criterion" == bash\ -n* ]]; then
+      if eval "$criterion" 2>/dev/null; then
+        echo "  OK: $criterion"
+      else
+        echo "  FAIL: $criterion"
+        failed=1
+      fi
+    elif [[ "$criterion" == python\ -m\ json.tool* ]]; then
+      file="${criterion#python -m json.tool }"
+      if python3 -m json.tool "$REPO_ROOT/$file" > /dev/null 2>&1; then
+        echo "  OK: $criterion"
+      else
+        echo "  FAIL: $criterion"
+        failed=1
+      fi
+    fi
+  done < <(get_story_acceptance_criteria "$story_id")
+
+  return $failed
 }
 
 mark_story_passed() {
@@ -188,59 +227,36 @@ mark_story_passed() {
   jq --arg id "$story_id" '
     .userStories = [
       .userStories[]
-      | if .id == $id then
-          (.passes = true)
-        else
-          .
-        end
+      | if .id == $id then (.passes = true) else . end
     ]
   ' "$PRD_FILE" > "$PRD_FILE.tmp" && mv "$PRD_FILE.tmp" "$PRD_FILE"
 }
 
-mark_progress_checked() {
-  local story_id="$1"
-  if [ ! -f "$PROGRESS_FILE" ]; then
-    return 0
-  fi
-
-  # Replace: - [ ] AUDIT-001: ...  ->  - [x] AUDIT-001: ...
-  sed -i '' "s|^- \\[ \\] ${story_id}:|- [x] ${story_id}:|g" "$PROGRESS_FILE" || true
-}
-
-# Pinned by default. Adjust as needed for your Codex access and preference.
 REQUESTED_MODEL="gpt-5.5"
 REASONING_EFFORT="high"
 
 if [[ -n "${CODEX_MODEL:-}" && "${CODEX_MODEL}" != "$REQUESTED_MODEL" ]]; then
-  echo "ERROR: This loop is pinned to CODEX_MODEL=$REQUESTED_MODEL. Unset CODEX_MODEL to continue."
-  exit 1
-fi
-
-if [[ -n "${CODEX_REASONING_EFFORT:-}" && "${CODEX_REASONING_EFFORT}" != "$REASONING_EFFORT" ]]; then
-  echo "ERROR: This loop is pinned to CODEX_REASONING_EFFORT=$REASONING_EFFORT. Unset CODEX_REASONING_EFFORT to continue."
+  echo "ERROR: Loop pinned to CODEX_MODEL=$REQUESTED_MODEL. Unset CODEX_MODEL to continue."
   exit 1
 fi
 
 touch "$RUN_LOG" "$EVENT_LOG"
 
-echo "Starting Ralph Audit (OpenAI Codex)"
-echo "  Max iterations: $MAX_ITERATIONS"
-echo "  Max attempts per story: $MAX_ATTEMPTS_PER_STORY"
-echo "  Model: $REQUESTED_MODEL (reasoning_effort=$REASONING_EFFORT)"
+echo "Starting Ralph Implementation Loop (OpenAI Codex)"
+echo "  Max iterations:           $MAX_ITERATIONS"
+echo "  Max attempts per story:   $MAX_ATTEMPTS_PER_STORY"
+echo "  Model:                    $REQUESTED_MODEL (reasoning_effort=$REASONING_EFFORT)"
+echo "  PRD:                      $PRD_FILE"
 echo "  Logs:"
-echo "    - events: $EVENT_LOG"
-echo "    - full:   $RUN_LOG"
-echo "  Tail:"
 echo "    tail -n $TAIL_N -f $EVENT_LOG"
 echo "    tail -n $TAIL_N -f $RUN_LOG"
+echo ""
 
-log_event "RUN START max_iterations=$MAX_ITERATIONS max_attempts_per_story=$MAX_ATTEMPTS_PER_STORY search=$ENABLE_SEARCH model=$REQUESTED_MODEL reasoning_effort=$REASONING_EFFORT"
+log_event "RUN START max_iterations=$MAX_ITERATIONS max_attempts=$MAX_ATTEMPTS_PER_STORY model=$REQUESTED_MODEL"
 
-# Preflight: verify the requested model works for current Codex auth.
+# Preflight: verify model access
 MODEL_CHECK_CMD=(
-  codex
-  -a never
-  exec
+  codex -a never exec
   -C "$REPO_ROOT"
   -m "$REQUESTED_MODEL"
   -c "model_reasoning_effort=\"$REASONING_EFFORT\""
@@ -250,20 +266,17 @@ MODEL_CHECK_CMD=(
 
 if ! "${MODEL_CHECK_CMD[@]}" > "$MODEL_CHECK_LOG" 2>&1; then
   echo "ERROR: Model preflight failed for '$REQUESTED_MODEL'. See: $MODEL_CHECK_LOG"
-  echo "Fix options:"
-  echo "  1) Re-auth with an API key that has access:"
-  echo "     printenv OPENAI_API_KEY | codex login --with-api-key"
+  echo "Re-auth: printenv OPENAI_API_KEY | codex login --with-api-key"
   exit 1
 fi
 
-CODEX_ARGS=(
-  -a never
-)
+echo "Model preflight OK."
+echo ""
 
+CODEX_ARGS=(-a never)
 if [[ "$ENABLE_SEARCH" == "true" ]]; then
   CODEX_ARGS+=(--search)
 fi
-
 CODEX_ARGS+=(
   exec
   -C "$REPO_ROOT"
@@ -275,23 +288,18 @@ CODEX_ARGS+=(
 for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo ""
   echo "==============================================================="
-  echo "  Ralph Audit Iteration $i of $MAX_ITERATIONS"
+  echo "  Ralph Implementation — Iteration $i of $MAX_ITERATIONS"
   echo "==============================================================="
-
-  echo "" >> "$RUN_LOG"
-  echo "===============================================================" >> "$RUN_LOG"
-  echo "Ralph Audit Iteration $i of $MAX_ITERATIONS - $(date)" >> "$RUN_LOG"
-  echo "===============================================================" >> "$RUN_LOG"
 
   log_event "ITERATION START $i/$MAX_ITERATIONS"
 
   CURRENT_STORY=$(get_current_story)
 
   if [ -z "$CURRENT_STORY" ]; then
-    log_event "RUN COMPLETE (no incomplete stories)"
-    echo "No incomplete stories found."
+    log_event "RUN COMPLETE all stories passed"
     echo ""
-    echo "Ralph audit completed all tasks!"
+    echo "All stories are marked passes: true."
+    echo "Ralph implementation completed!"
     echo "<promise>COMPLETE</promise>"
     exit 0
   fi
@@ -302,10 +310,8 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   fi
 
   if [ "$CURRENT_STORY" == "$LAST_STORY" ]; then
-    echo "Consecutive attempt on story: $CURRENT_STORY"
     ATTEMPTS=$(increment_story_attempts "$CURRENT_STORY")
-    echo "Attempts on $CURRENT_STORY: $ATTEMPTS/$MAX_ATTEMPTS_PER_STORY"
-
+    echo "Consecutive attempt on $CURRENT_STORY: $ATTEMPTS/$MAX_ATTEMPTS_PER_STORY"
     if check_circuit_breaker "$CURRENT_STORY"; then
       echo "Skipping to next story..."
       echo "$CURRENT_STORY" > "$LAST_STORY_FILE"
@@ -319,65 +325,74 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
   echo "$CURRENT_STORY" > "$LAST_STORY_FILE"
 
-  STORY_TITLE="$(get_story_title "$CURRENT_STORY")"
-  STORY_DESC="$(get_story_description "$CURRENT_STORY")"
-  STORY_NOTES="$(get_story_notes "$CURRENT_STORY")"
-  OUT_REL="$(get_story_output_relpath "$CURRENT_STORY")"
+  STORY_TITLE="$(get_story_field "$CURRENT_STORY" "title")"
+  STORY_DESC="$(get_story_field "$CURRENT_STORY" "description")"
+  STORY_NOTES="$(get_story_field "$CURRENT_STORY" "notes")"
+  STORY_DISCIPLINE="$(get_story_field "$CURRENT_STORY" "discipline")"
+  STORY_FIX="$(get_story_fix "$CURRENT_STORY")"
+  STORY_CRITERIA="$(get_story_acceptance_criteria "$CURRENT_STORY")"
 
-  if [ -z "$OUT_REL" ] || [ "$OUT_REL" == "null" ]; then
-    log_event "ERROR story=$CURRENT_STORY could-not-determine-output-path"
-    echo "ERROR: Could not determine output path for story $CURRENT_STORY from prd.json acceptanceCriteria."
-    exit 1
-  fi
-
-  OUT_FILE="$REPO_ROOT/$OUT_REL"
-  mkdir -p "$(dirname "$OUT_FILE")"
-
-  log_event "STORY START id=$CURRENT_STORY attempt=$ATTEMPTS out=$OUT_REL title=$(printf '%s' "$STORY_TITLE" | tr '\n' ' ')"
+  log_event "STORY START id=$CURRENT_STORY attempt=$ATTEMPTS title=$(printf '%s' "$STORY_TITLE" | tr '\n' ' ')"
 
   PROMPT_FILE="$SCRIPT_DIR/.prompt.md"
   LAST_MESSAGE_FILE="$SCRIPT_DIR/.last-message.md"
 
   {
-    # NOTE: bash printf treats leading '-' as an option unless you pass `--`.
-    printf -- "# Ralph Audit (OpenAI Codex)\n\n"
+    printf -- "# Ralph Implementation Loop\n\n"
     printf -- "Today's date: %s\n\n" "$(date +%Y-%m-%d)"
-    printf -- "Current story: %s — %s\n" "$CURRENT_STORY" "$STORY_TITLE"
-    printf -- "Target output file (relative to repo root): %s\n\n" "$OUT_REL"
-    printf -- "Hard requirements:\n"
-    printf -- "- Do NOT modify any files in the repo.\n"
-    printf -- "- Your final response MUST be ONLY the markdown report contents for %s.\n" "$OUT_REL"
-    printf -- "  Do not include any extra commentary.\n\n"
-    printf -- "Story description:\n%s\n\n" "$STORY_DESC"
-    printf -- "Story notes:\n%s\n\n" "$STORY_NOTES"
+    printf -- "## Current Story\n\n"
+    printf -- "**ID:** %s\n" "$CURRENT_STORY"
+    printf -- "**Title:** %s\n" "$STORY_TITLE"
+    printf -- "**Discipline:** %s\n\n" "$STORY_DISCIPLINE"
+    printf -- "## Description\n\n%s\n\n" "$STORY_DESC"
+    printf -- "## Acceptance Criteria\n\n%s\n\n" "$STORY_CRITERIA"
+    printf -- "## Notes\n\n%s\n\n" "$STORY_NOTES"
+    if [ -n "$STORY_FIX" ]; then
+      printf -- "## Known Fix\n\n%s\n\n" "$STORY_FIX"
+    fi
     printf -- "---\n\n"
-    cat "$SCRIPT_DIR/CODEX.md"
+    printf -- "## Instructions\n\n"
+    printf -- "1. Implement the changes required by this story in the repository.\n"
+    printf -- "2. Apply ALL acceptance criteria, including py_compile checks.\n"
+    printf -- "3. Do NOT break existing functionality.\n"
+    printf -- "4. Do NOT remove tests or skip acceptance criteria.\n"
+    printf -- "5. If a Known Fix is provided above, apply it exactly.\n"
+    printf -- "6. After implementing, run the py_compile checks listed in acceptance criteria.\n"
+    printf -- "7. Commit the changes with message: 'fix(%s): %s'\n\n" "$CURRENT_STORY" "$STORY_TITLE"
+    printf -- "Repository root: %s\n" "$REPO_ROOT"
   } > "$PROMPT_FILE"
 
-  # Run Codex read-only; persist the model's last message to a file we control.
   codex "${CODEX_ARGS[@]}" --output-last-message "$LAST_MESSAGE_FILE" < "$PROMPT_FILE" 2>&1 | tee -a "$RUN_LOG" || true
 
   if [ ! -s "$LAST_MESSAGE_FILE" ]; then
     log_event "ERROR story=$CURRENT_STORY codex-empty-last-message"
-    echo "ERROR: Codex did not produce a last message file (or it was empty). See: $RUN_LOG"
-    echo "Iteration $i complete (failed). Continuing..."
+    echo "ERROR: Codex did not produce output. See: $RUN_LOG"
     sleep 2
     continue
   fi
 
-  # Persist the audit report and mark story passed in PRD state.
+  # Save implementation report
+  OUT_FILE="$SCRIPT_DIR/audit/${CURRENT_STORY}-implementation.md"
   cat "$LAST_MESSAGE_FILE" > "$OUT_FILE"
-  mark_story_passed "$CURRENT_STORY"
-  mark_progress_checked "$CURRENT_STORY"
 
-  log_event "STORY COMPLETE id=$CURRENT_STORY wrote=$OUT_REL bytes=$(wc -c < \"$OUT_FILE\" | tr -d ' ')"
+  # Run acceptance checks
+  if run_acceptance_checks "$CURRENT_STORY"; then
+    mark_story_passed "$CURRENT_STORY"
+    log_event "STORY COMPLETE id=$CURRENT_STORY attempt=$ATTEMPTS"
+    echo "Story $CURRENT_STORY passed acceptance checks. Marked as complete."
+  else
+    log_event "STORY FAIL id=$CURRENT_STORY attempt=$ATTEMPTS acceptance-checks-failed"
+    echo "Story $CURRENT_STORY failed acceptance checks. Will retry."
+  fi
 
-  REMAINING=$(jq -r '.userStories[] | select(.passes == false) | .id' "$PRD_FILE" 2>/dev/null | head -n 1 || true)
-  if [ -z "$REMAINING" ]; then
-    log_event "RUN COMPLETE (all stories passed)"
+  REMAINING=$(jq -r '[.userStories[] | select(.passes == false)] | length' "$PRD_FILE" 2>/dev/null || echo "0")
+  echo "Remaining stories: $REMAINING"
+
+  if [ "$REMAINING" == "0" ]; then
+    log_event "RUN COMPLETE all stories passed"
     echo ""
-    echo "All audit tasks are marked passes:true."
-    echo "Ralph audit completed all tasks!"
+    echo "All stories are marked passes: true."
+    echo "Ralph implementation completed!"
     echo "<promise>COMPLETE</promise>"
     exit 0
   fi
@@ -388,6 +403,7 @@ done
 
 echo ""
 echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
+echo "Remaining: $(jq -r '[.userStories[] | select(.passes == false)] | length' "$PRD_FILE") stories"
 echo "Tail log: tail -f $RUN_LOG"
-log_event "RUN STOPPED (reached max iterations without completing all tasks)"
+log_event "RUN STOPPED reached max iterations"
 exit 1

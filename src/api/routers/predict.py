@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from app.models.schemas import BatchPredictRequest, PredictRequest, PredictResponse, RoleEnum
-from app.security.auth import require_role
-from app.services.predictor import predictor_service
+from src.api.models.schemas import BatchPredictRequest, PredictRequest, PredictResponse, RoleEnum
+from src.api.security.auth import require_role
+from src.api.services.predictor import predictor_service
 
 router = APIRouter(tags=["predict"])
 

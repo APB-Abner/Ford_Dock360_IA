@@ -4,7 +4,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from fastapi import HTTPException
-from app.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
+from src.api.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
 
 try:
     from src.pipeline.complaints_loader import get_top3_por_modelo

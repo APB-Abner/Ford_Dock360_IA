@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import health, predict
+from src.api.routers import health, predict
 
 
 app = FastAPI(title="Ford VinGuard ML API")
