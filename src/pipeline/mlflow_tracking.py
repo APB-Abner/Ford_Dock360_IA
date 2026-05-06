@@ -269,7 +269,7 @@ def register_churn_classifier(
     )
 
     rf = RandomForestClassifier(
-        n_estimators=50,
+        n_estimators=50,  # intentionally smaller than train_churn (200) for faster MLflow tracking runs
         max_depth=8,
         class_weight="balanced",
         max_features="sqrt",
@@ -278,7 +278,7 @@ def register_churn_classifier(
         n_jobs=-1,
     )
     pipeline = _make_classifier_pipeline(x_train, rf)
-    model = CalibratedClassifierCV(estimator=pipeline, cv=3, method="isotonic")
+    model = CalibratedClassifierCV(estimator=pipeline, cv=5, method="isotonic")
 
     model.fit(x_train, y_train)
     y_score = model.predict_proba(x_test)[:, 1]

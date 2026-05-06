@@ -12,3 +12,18 @@ __pycache__/
 .ipynb_checkpoints/
 *.pkl
 *.joblib
+
+# Runtime logs and agent artifacts
+/scripts/run.log
+/scripts/events.log
+/scripts/.model-check.log
+/scripts/.prompt.md
+/scripts/.last-message.md
+/scripts/.last-story
+/scripts/.story-attempts
+/scripts/.current-provider
+/scripts/audit/
+
+# Dev environment caches
+/.cache/
+/.npm-global/

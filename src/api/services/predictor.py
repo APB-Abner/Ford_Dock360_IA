@@ -20,7 +20,9 @@ _ACOES = {
 }
 
 MODELS_DIR = Path(__file__).resolve().parents[3] / "models"
-EXPECTED_SHA256 = {
+# Fallback checksums for models that predate sidecar files (.sha256).
+# The training pipeline writes a sidecar on each run, making this stale-proof.
+_FALLBACK_SHA256 = {
     "churn_rf_calibrated.joblib": "72b20520a269f8c7d867f034832b61c5ad1534710910ba410a8cdb457a411a14",
 }
 
@@ -52,8 +54,13 @@ def _sha256(path):
     return digest.hexdigest()
 
 
-def _verify_checksum(path):
-    expected = EXPECTED_SHA256.get(path.name)
+def _verify_checksum(path: Path) -> None:
+    sidecar = path.with_suffix(".sha256")
+    expected: str | None
+    if sidecar.exists():
+        expected = sidecar.read_text().strip()
+    else:
+        expected = _FALLBACK_SHA256.get(path.name)
     if expected is None:
         _alert(f"checksum SHA256 nao cadastrado para {path}")
         raise HTTPException(status_code=503, detail="Checksum SHA256 do modelo nao cadastrado")
@@ -127,8 +134,9 @@ class PredictorService:
             classes = model.classes_
             perfil = str(classes[probs.argmax()])
             return perfil, {str(c): round(float(p), 4) for c, p in zip(classes, probs)}
-        except Exception:
-            return None, None
+        except (ValueError, AttributeError, KeyError) as exc:
+            _alert(f'erro ao predizer perfil: {exc}')
+            raise HTTPException(status_code=503, detail=f'Modelo de perfil falhou: {exc}') from exc
 
     def predict(self, features, modelo_veiculo=None):
         frame = self._build_frame(features)

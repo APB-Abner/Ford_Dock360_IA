@@ -1,8 +1,10 @@
 import matplotlib
 matplotlib.use("Agg")
 
+import hashlib
 import os
 import tempfile
+from pathlib import Path
 
 import joblib
 import mlflow
@@ -209,6 +211,11 @@ def train_churn_model(
     plt.close()
 
     joblib.dump(model, model_path, compress=3)
+    digest = hashlib.sha256()
+    with open(model_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    Path(model_path).with_suffix(".sha256").write_text(digest.hexdigest() + "\n")
     print(f"Precision-Recall curve salva em {pr_curve_path}")
     print(f"Modelo salvo em {model_path}")
 

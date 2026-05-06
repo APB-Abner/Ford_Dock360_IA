@@ -139,3 +139,49 @@ def train_all_models(
 
 if __name__ == "__main__":
     train_all_models()
+
+
+def train_and_save_best(
+    input_path="data/raw/ford_clientes_operacional_compra.csv",
+    labels_path="data/processed/cluster_labels.csv",
+    model_path="models/perfil_rf_classifier.joblib",
+):
+    import hashlib
+    from pathlib import Path
+    import joblib
+
+    comparison = train_all_models(input_path=input_path, labels_path=labels_path)
+
+    df = pd.read_csv(input_path)
+    labels = pd.read_csv(labels_path)[["cliente_id", "perfil_cluster"]]
+    df = df.merge(labels, left_on="id_cliente", right_on="cliente_id", how="inner")
+
+    drop_cols = ["id_cliente", "cliente_id", "modelo_veiculo", "perfil_cluster"]
+    drop_cols += [col for col in LEAKAGE_COLUMNS if col != "perfil_cluster"]
+    y = df["perfil_cluster"]
+    x = df.drop(columns=[col for col in drop_cols if col in df.columns])
+    check_leakage(x)
+
+    numeric_cols, categorical_cols, binary_cols = _split_columns(x)
+    preprocessor = build_preprocessor(numeric_cols, categorical_cols, binary_cols)
+    rf = RandomForestClassifier(
+        n_estimators=200, class_weight="balanced",
+        max_features="sqrt", random_state=RANDOM_STATE, n_jobs=2,
+    )
+    pipeline = Pipeline([("preprocessor", preprocessor), ("model", rf)])
+    pipeline.fit(x, y)
+
+    os.makedirs("models", exist_ok=True)
+    joblib.dump(pipeline, model_path, compress=3)
+
+    digest = hashlib.sha256()
+    with open(model_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    Path(model_path).with_suffix(".sha256").write_text(digest.hexdigest() + "\n")
+    print(f"Modelo de perfil salvo em {model_path}")
+    return pipeline
+
+
+if __name__ == "__main__":
+    train_and_save_best()

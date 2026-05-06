@@ -1,18 +1,1 @@
-OpenAI Codex v0.128.0 (research preview)
---------
-workdir: /workspace
-model: gpt-5.5
-provider: openai
-approval: never
-sandbox: danger-full-access
-reasoning effort: high
-reasoning summaries: none
-session id: 019df672-a4b5-7b80-86c0-dd731d14612b
---------
-user
-Respond with exactly: OK
-codex
-OK
-tokens used
-2,506
 OK
