@@ -13,7 +13,7 @@ _MIN_KEY_LEN = 32
 _EXAMPLE_KEY = "changeme-local-only"
 
 
-def _check_secret_key():
+def _check_secret_key() -> tuple[bool, str]:
     key = os.environ.get("SECRET_KEY", "")
     if len(key) < _MIN_KEY_LEN:
         return False, f"SECRET_KEY ausente ou com menos de {_MIN_KEY_LEN} caracteres"
@@ -22,7 +22,7 @@ def _check_secret_key():
     return True, "ok"
 
 
-def _check_artifacts():
+def _check_artifacts() -> tuple[bool, dict[str, str], list[str]]:
     checks: dict[str, str] = {}
     failed: list[str] = []
 
@@ -58,8 +58,8 @@ def _check_artifacts():
     return len(failed) == 0, checks, failed
 
 
-@router.get("/health")
-def health():
+@router.get("/health", response_model=None)
+def health() -> dict | JSONResponse:
     key_ok, key_msg = _check_secret_key()
     artifacts_ok, artifact_checks, failed = _check_artifacts()
 
