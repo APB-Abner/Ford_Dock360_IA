@@ -106,34 +106,52 @@ class PredictorService:
         return self.model_perfil
 
     def _build_frame(self, features):
+        return self._build_batch_frame([features])
+
+    def _build_batch_frame(self, features_list):
         self._load_churn()
         if not self.feature_names:
             estimator = getattr(self.model_churn, "estimator", None)
             preprocessor = getattr(estimator, "named_steps", {}).get("preprocessor")
             self.feature_names = list(getattr(preprocessor, "feature_names_in_", []))
         if self.feature_names:
-            missing = [c for c in self.feature_names if c not in features]
+            missing = sorted({c for features in features_list for c in self.feature_names if c not in features})
             if missing:
                 raise HTTPException(status_code=422, detail={"missing_features": missing})
-            features = {c: features[c] for c in self.feature_names}
-        return pd.DataFrame([features])
+            features_list = [{c: features[c] for c in self.feature_names} for features in features_list]
+        return pd.DataFrame(features_list)
 
     def _predict_churn(self, frame):
+        return self._predict_churn_batch(frame)[0]
+
+    def _predict_churn_batch(self, frame):
         model = self._load_churn()
-        prob = float(model.predict_proba(frame)[0][1]) if hasattr(model, "predict_proba") else float(model.predict(frame)[0])
-        label = ChurnLabelEnum.churn if prob >= 0.5 else ChurnLabelEnum.no_churn
-        risk = RiskLevelEnum.high if prob >= 0.70 else (RiskLevelEnum.medium if prob >= 0.40 else RiskLevelEnum.low)
-        return label, round(prob, 6), risk
+        if hasattr(model, "predict_proba"):
+            probs = [float(p[1]) for p in model.predict_proba(frame)]
+        else:
+            probs = [float(p) for p in model.predict(frame)]
+        results = []
+        for prob in probs:
+            label = ChurnLabelEnum.churn if prob >= 0.5 else ChurnLabelEnum.no_churn
+            risk = RiskLevelEnum.high if prob >= 0.70 else (RiskLevelEnum.medium if prob >= 0.40 else RiskLevelEnum.low)
+            results.append((label, round(prob, 6), risk))
+        return results
 
     def _predict_perfil(self, frame):
+        return self._predict_perfil_batch(frame)[0]
+
+    def _predict_perfil_batch(self, frame):
         model = self._load_perfil()
         if model is None:
-            return None, None
+            return [(None, None) for _ in range(len(frame))]
         try:
-            probs = model.predict_proba(frame)[0]
+            probs_batch = model.predict_proba(frame)
             classes = model.classes_
-            perfil = str(classes[probs.argmax()])
-            return perfil, {str(c): round(float(p), 4) for c, p in zip(classes, probs)}
+            results = []
+            for probs in probs_batch:
+                perfil = str(classes[probs.argmax()])
+                results.append((perfil, {str(c): round(float(p), 4) for c, p in zip(classes, probs)}))
+            return results
         except (ValueError, AttributeError, KeyError) as exc:
             _alert(f'erro ao predizer perfil: {exc}')
             raise HTTPException(status_code=503, detail=f'Modelo de perfil falhou: {exc}') from exc
@@ -157,6 +175,35 @@ class PredictorService:
             acao_recomendada=_ACOES.get(perfil) if perfil else None,
             historico_problemas=historico,
         )
+
+    def predict_batch(self, items):
+        if not items:
+            return []
+
+        frame = self._build_batch_frame([item.features for item in items])
+        churn_results = self._predict_churn_batch(frame)
+        perfil_results = self._predict_perfil_batch(frame)
+
+        responses = []
+        for item, churn, perfil_result in zip(items, churn_results, perfil_results):
+            label, prob_churn, risk = churn
+            perfil, prob_perfil = perfil_result
+            historico = []
+            if _COMPLAINTS_OK and item.modelo_veiculo:
+                try:
+                    historico = get_top3_por_modelo(item.modelo_veiculo)
+                except Exception:
+                    pass
+            responses.append(PredictResponse(
+                prediction=label,
+                churn_probability=prob_churn,
+                risk_level=risk,
+                perfil_previsto=perfil,
+                probabilidades_perfil=prob_perfil,
+                acao_recomendada=_ACOES.get(perfil) if perfil else None,
+                historico_problemas=historico,
+            ))
+        return responses
 
 
 predictor_service = PredictorService()

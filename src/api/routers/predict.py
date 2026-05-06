@@ -13,4 +13,4 @@ def predict(request: PredictRequest, role: str = Depends(require_role(RoleEnum.a
 
 @router.post("/predict/batch", response_model=list[PredictResponse])
 def predict_batch(request: BatchPredictRequest, role: str = Depends(require_role(RoleEnum.analyst))):
-    return [predictor_service.predict(i.features, modelo_veiculo=i.modelo_veiculo) for i in request.items]
+    return predictor_service.predict_batch(request.items)
