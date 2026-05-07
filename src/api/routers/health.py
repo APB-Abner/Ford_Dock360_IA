@@ -1,8 +1,9 @@
-import os
 from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+
+from src.api.config import settings
 
 router = APIRouter(tags=["health"])
 
@@ -14,7 +15,7 @@ _EXAMPLE_KEY = "changeme-local-only"
 
 
 def _check_secret_key() -> tuple[bool, str]:
-    key = os.environ.get("SECRET_KEY", "")
+    key = settings.SECRET_KEY
     if len(key) < _MIN_KEY_LEN:
         return False, f"SECRET_KEY ausente ou com menos de {_MIN_KEY_LEN} caracteres"
     if key == _EXAMPLE_KEY:

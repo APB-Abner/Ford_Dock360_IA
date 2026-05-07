@@ -19,30 +19,6 @@ RANDOM_STATE = 42
 LABELS = ["abandono", "economico", "esquecido", "fiel"]
 
 
-def _add_plano_manutencao(df):
-    if "plano_manutencao" in df.columns:
-        return df
-
-    required = {"share_revisoes_rede_24m", "qtde_revisoes_24m"}
-    if not required.issubset(df.columns):
-        return df
-
-    df = df.copy()
-    df["plano_manutencao"] = "fora_rede"
-    df.loc[df["share_revisoes_rede_24m"] >= 0.70, "plano_manutencao"] = "com_plano"
-    df.loc[
-        (df["share_revisoes_rede_24m"] >= 0.30)
-        & (df["share_revisoes_rede_24m"] < 0.70),
-        "plano_manutencao",
-    ] = "avulso_rede"
-    df.loc[
-        (df["share_revisoes_rede_24m"] >= 0.55)
-        & (df["qtde_revisoes_24m"] >= 2),
-        "plano_manutencao",
-    ] = "com_plano"
-    return df
-
-
 def _split_columns(x):
     numeric_cols = []
     categorical_cols = []
@@ -69,7 +45,6 @@ def _load_data(input_path, target_col):
     y = df[target_col]
     x = df.drop(columns=[col for col in drop_cols if col in df.columns])
     check_leakage(x)
-    x = _add_plano_manutencao(x)
     return x, y
 
 
@@ -130,10 +105,6 @@ def plot_feature_importance(pipeline, output_path="reports/feature_importance"):
     plt.close()
 
     importance.to_csv(f"{output_path}.csv", index=False)
-    top3 = importance.head(3)["feature"].tolist()
-    if not any(feature.startswith("plano_manutencao") for feature in top3):
-        print(f"AVISO: plano_manutencao nao ficou no top 3: {top3}")
-
     return importance
 
 

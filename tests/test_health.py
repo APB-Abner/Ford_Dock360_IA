@@ -25,3 +25,21 @@ def test_health_503_sem_modelos():
     
     assert response.status_code == 503
     assert response.json()["status"] == "degraded"
+
+
+def test_health_ok_com_secret_key_do_settings_e_modelos(tmp_path):
+    """Verifica se health usa settings.SECRET_KEY, nao os.environ."""
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "churn_rf_calibrated.joblib").write_bytes(b"fake-model")
+
+    with (
+        patch('src.api.routers.health._MODELS_DIR', models_dir),
+        patch('src.api.routers.health.settings.SECRET_KEY', 'y' * 32),
+        patch.dict(os.environ, {}, clear=True),
+    ):
+        response = client.get('/health')
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert response.json()["checks"]["secret_key"] == "ok"
