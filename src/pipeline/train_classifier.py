@@ -137,10 +137,6 @@ def train_all_models(
     return comparison
 
 
-if __name__ == "__main__":
-    train_all_models()
-
-
 def train_and_save_best(
     input_path="data/raw/ford_clientes_operacional_compra.csv",
     labels_path="data/processed/cluster_labels.csv",
