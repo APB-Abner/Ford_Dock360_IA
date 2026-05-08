@@ -1,4 +1,4 @@
-# Ford VinGuard (Caminho B: Dados Reais)
+# Ford VinGuard
 
 Projeto de Machine Learning para prever risco de churn na rede Ford Brasil e apoiar a ficha de abordagem comercial (Dock 360) com perfil de cliente, probabilidade de churn e histórico de problemas.
 
