@@ -25,7 +25,7 @@ O Ford VinGuard identifica clientes com maior probabilidade de abandonar a rede 
 |-- notebooks/                # Notebooks de EDA e Pipeline Completo
 |-- reports/                  # Gráficos e relatórios de métricas
 |-- src/
-|   |-- api/                  # API FastAPI (Path B)
+|   |-- api/                  # API FastAPI 
 |   `-- pipeline/             # Scripts de engenharia e treino (Real)
 |-- tests/                    # Testes de leakage, saúde e schema
 |-- requirements.txt
@@ -46,7 +46,7 @@ O Ford VinGuard identifica clientes com maior probabilidade de abandonar a rede 
 ### API
 
 - `src/api/main.py`: Ponto de entrada FastAPI.
-- `src/api/services/predictor.py`: Lógica de inferência com suporte a Path B.
+- `src/api/services/predictor.py`: Lógica de inferência.
 - `src/api/models/schemas.py`: Contratos Pydantic com exemplos reais.
 
 ## Regra Crítica: Data Leakage
