@@ -24,6 +24,20 @@ class PredictRequest(BaseModel):
     features: dict
     modelo_veiculo: Optional[str] = None
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "features": {
+                    "ano_modelo": 2023,
+                    "dias_ate_entrega": 11,
+                    "idade_veiculo_meses": 18.5,
+                    "modelo": "RANGER"
+                },
+                "modelo_veiculo": "Ranger"
+            }
+        }
+    }
+
 
 class PredictResponse(BaseModel):
     prediction: ChurnLabelEnum

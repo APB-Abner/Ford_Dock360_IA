@@ -1,31 +1,27 @@
-import sys
-from pathlib import Path
-
 import pytest
 import pandas as pd
+from src.pipeline.config import LEAKAGE_BEHAVIORAL
+from src.pipeline.train_churn_real import check_leakage
 
-# Root path for imports
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+def test_leakage_detection():
+    # Test each behavioral column
+    for col in LEAKAGE_BEHAVIORAL:
+        df = pd.DataFrame({
+            col: [1, 2, 3],
+            "ano_modelo": [2020, 2021, 2022],
+            "modelo": ["KA", "KA", "KA"]
+        })
+        with pytest.raises(ValueError, match=f"Colunas comportamentais \(leakage\) em X: \['{col}'\]"):
+            check_leakage(df)
 
-from src.pipeline.config import LEAKAGE_COLUMNS
-from src.pipeline.train_churn import check_leakage
+def test_no_leakage_passes():
+    df = pd.DataFrame({
+        "ano_modelo": [2020, 2021, 2022],
+        "modelo": ["KA", "KA", "KA"],
+        "dias_ate_entrega": [10, 15, 20]
+    })
+    # Should not raise any error
+    check_leakage(df)
 
-
-def test_bloqueia_coluna_proibida():
-    """Verifica se colunas proibidas disparam ValueError."""
-    for col in LEAKAGE_COLUMNS:
-        x = pd.DataFrame({col: [1], "idade": [30]})
-        with pytest.raises(ValueError):
-            check_leakage(x)
-
-
-def test_passa_features_limpas():
-    """Verifica se features permitidas passam sem erro."""
-    x = pd.DataFrame({"idade": [30], "renda": [5000], "modelo_veiculo": ["ranger"]})
-    check_leakage(x)
-
-
-def test_len_leakage_columns():
-    """Valida se a lista de leakage tem os 12 itens obrigatorios."""
-    assert len(LEAKAGE_COLUMNS) == 12
+def test_leakage_count():
+    assert len(LEAKAGE_BEHAVIORAL) == 11

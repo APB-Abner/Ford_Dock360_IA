@@ -11,7 +11,7 @@ from src.api.services.predictor import PredictorService
 
 
 class FakeChurnModel:
-    feature_names_in_ = ["idade", "renda"]
+    feature_names_in_ = ["ano_modelo", "dias_ate_entrega", "idade_veiculo_meses", "modelo"]
 
     def __init__(self):
         self.predict_proba_calls = 0
@@ -43,11 +43,11 @@ def test_predict_batch_retorna_lista_de_respostas_vetorizada():
     perfil_model = FakePerfilModel()
     service.model_churn = churn_model
     service.model_perfil = perfil_model
-    service.feature_names = ["idade", "renda"]
+    service.feature_names = ["ano_modelo", "dias_ate_entrega", "idade_veiculo_meses", "modelo"]
 
     items = [
-        PredictRequest(features={"idade": 30, "renda": 5000}, modelo_veiculo="Ranger"),
-        PredictRequest(features={"idade": 55, "renda": 9000}, modelo_veiculo="Ka"),
+        PredictRequest(features={"ano_modelo": 2023, "dias_ate_entrega": 10, "idade_veiculo_meses": 12, "modelo": "RANGER"}, modelo_veiculo="Ranger"),
+        PredictRequest(features={"ano_modelo": 2021, "dias_ate_entrega": 5, "idade_veiculo_meses": 24, "modelo": "KA"}, modelo_veiculo="Ka"),
     ]
 
     try:

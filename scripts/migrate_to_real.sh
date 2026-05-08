@@ -1,3 +1,78 @@
+#!/usr/bin/env bash
+# Migracao completa para Caminho B (dataset real Ford)
+# Executar de /workspace: bash scripts/migrate_to_real.sh
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+echo "Raiz do projeto: $ROOT"
+echo ""
+
+# 1. Apagar scripts antigos do caminho A
+echo "=== 1. Removendo scripts do Caminho A (sintetico) ==="
+rm -f src/pipeline/clustering.py
+rm -f src/pipeline/train_classifier.py
+rm -f src/pipeline/train_churn.py
+rm -f src/pipeline/generate_data.py
+echo "  Scripts antigos removidos"
+
+# 2. Apagar dados sinteticos antigos
+echo ""
+echo "=== 2. Removendo CSVs sinteticos antigos ==="
+rm -f data/raw/ford_clientes_historico_completo.csv
+rm -f data/raw/ford_clientes_operacional_compra.csv
+rm -f data/processed/cluster_labels.csv
+echo "  CSVs sinteticos removidos"
+
+# 3. Atualizar config.py
+echo ""
+echo "=== 3. Atualizando config.py ==="
+cat > src/pipeline/config.py << 'PYEOF'
+"""Constantes do pipeline Ford VinGuard - Caminho B (dados reais)."""
+
+RANDOM_STATE = 42
+TEST_SIZE = 0.20
+N_CLUSTERS = 4
+N_ESTIMATORS = 200
+
+# Janela de churn em meses (padrao industria automotiva)
+JANELA_CHURN_MESES = 18
+
+# Features comportamentais derivadas das ordens de servico (NAO usar no classificador)
+LEAKAGE_BEHAVIORAL = [
+    "qtde_revisoes",
+    "meses_desde_ultimo_servico",
+    "meses_relacionamento",
+    "n_dealers_usados",
+    "km_max",
+    "pct_agenda",
+    "intervalo_medio_revisoes_dias",
+    "dias_ate_primeira_revisao",
+    "primeiro_servico",
+    "ultimo_servico",
+    "churn",
+]
+
+# Features disponiveis no momento da compra (uso permitido em classificacao)
+PURCHASE_FEATURES_NUMERIC = ["ano_modelo", "dias_ate_entrega", "idade_veiculo_meses"]
+PURCHASE_FEATURES_CATEGORICAL = ["modelo"]
+
+# Mantido por compatibilidade — apontando para o novo conjunto
+LEAKAGE_COLUMNS = LEAKAGE_BEHAVIORAL
+PYEOF
+echo "  config.py atualizado"
+
+# 4. Garantir __init__.py
+echo ""
+echo "=== 4. Criando __init__.py ==="
+touch src/__init__.py
+touch src/pipeline/__init__.py
+echo "  __init__.py garantidos"
+
+# 5. Atualizar AGENTS.md
+echo ""
+echo "=== 5. Atualizando AGENTS.md ==="
+cat > AGENTS.md << 'MDEOF'
 # Instrucoes para o Agente — Ford VinGuard (Caminho B: dados reais)
 
 ## Filosofia geral
@@ -69,3 +144,28 @@ Features permitidas (momento da compra):
 - matplotlib.use('Agg') na primeira linha de scripts que geram graficos
 - Salvar com plt.savefig(..., dpi=150, bbox_inches='tight') antes de plt.close()
 - Sempre os.makedirs('reports', exist_ok=True) antes
+MDEOF
+echo "  AGENTS.md atualizado"
+
+# 6. Atualizar config da API para apontar para o novo modelo
+echo ""
+echo "=== 6. Verificando estrutura de pastas ==="
+mkdir -p data/processed models reports
+echo "  Pastas garantidas"
+
+echo ""
+echo "=== Migracao concluida ==="
+echo ""
+echo "PROXIMO PASSO MANUAL:"
+echo "  1. Copie o arquivo Excel para data/raw/:"
+echo "     cp ~/Downloads/vin_share_Desafio_02.xlsx data/raw/"
+echo ""
+echo "  2. Rode os 4 scripts em sequencia:"
+echo "     export PYTHONPATH=/workspace:\$PYTHONPATH"
+echo "     python -m src.pipeline.feature_engineering_real"
+echo "     python -m src.pipeline.clustering_real"
+echo "     python -m src.pipeline.train_classifier_real"
+echo "     python -m src.pipeline.train_churn_real"
+echo ""
+echo "  3. Modelos vao aparecer em models/"
+echo "  4. Graficos em reports/"

@@ -1,6 +1,7 @@
-data/
-mlruns/
-/models/
+data/raw/*.xlsx
+data/raw/*.csv
+data/processed/
+models/
 reports/
 .codex/
 .claude/
@@ -12,6 +13,7 @@ __pycache__/
 .ipynb_checkpoints/
 *.pkl
 *.joblib
+mlruns/
 
 # Runtime logs and agent artifacts
 /scripts/run.log

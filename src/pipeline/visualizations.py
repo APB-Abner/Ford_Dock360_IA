@@ -1,8 +1,14 @@
+"""
+Visualizacoes — Caminho B (dataset real Ford)
+
+Gera graficos de importancia de features, arvore de decisao e matriz de confusao
+usando o dataset agregado por VIN (vins_agregados.csv).
+"""
+
 import matplotlib
 matplotlib.use("Agg")
 
 import os
-
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -11,39 +17,23 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 
-from src.pipeline.preprocessor import build_preprocessor
-from src.pipeline.train_classifier import LEAKAGE_COLS, check_leakage
+from src.pipeline.config import (
+    PURCHASE_FEATURES_CATEGORICAL,
+    PURCHASE_FEATURES_NUMERIC,
+    RANDOM_STATE,
+    TEST_SIZE,
+)
+from src.pipeline.train_classifier_real import _build_preprocessor as build_preprocessor_perfil
+from src.pipeline.train_churn_real import check_leakage
 
-
-RANDOM_STATE = 42
-LABELS = ["abandono", "economico", "esquecido", "fiel"]
-
-
-def _split_columns(x):
-    numeric_cols = []
-    categorical_cols = []
-    binary_cols = []
-
-    for col in x.columns:
-        unique_count = x[col].dropna().nunique()
-        if unique_count <= 2:
-            binary_cols.append(col)
-        elif x[col].dtype == "object" or str(x[col].dtype) == "category":
-            categorical_cols.append(col)
-        else:
-            numeric_cols.append(col)
-
-    return numeric_cols, categorical_cols, binary_cols
+VINS_PATH = "data/processed/vins_agregados.csv"
 
 
 def _load_data(input_path, target_col):
     df = pd.read_csv(input_path)
-
-    drop_cols = ["id_cliente", "cliente_id", "modelo_veiculo", target_col]
-    drop_cols += [col for col in LEAKAGE_COLS if col != target_col]
-
+    feature_cols = PURCHASE_FEATURES_NUMERIC + PURCHASE_FEATURES_CATEGORICAL
+    x = df[feature_cols].copy()
     y = df[target_col]
-    x = df.drop(columns=[col for col in drop_cols if col in df.columns])
     check_leakage(x)
     return x, y
 
@@ -53,38 +43,27 @@ def _feature_names(preprocessor):
     return [name.split("__", 1)[-1] for name in names]
 
 
-def _make_pipeline(model, x):
-    numeric_cols, categorical_cols, binary_cols = _split_columns(x)
-    preprocessor = build_preprocessor(numeric_cols, categorical_cols, binary_cols)
-    return Pipeline(
-        [
-            ("preprocessor", preprocessor),
-            ("model", model),
-        ]
-    )
-
-
-def plot_decision_tree(pipeline, output_path="reports/decision_tree"):
+def plot_decision_tree(pipeline, output_path="reports/decision_tree.png"):
     os.makedirs("reports", exist_ok=True)
     features = _feature_names(pipeline.named_steps["preprocessor"])
     model = pipeline.named_steps["model"]
 
-    plt.figure(figsize=(28, 14))
+    plt.figure(figsize=(20, 10))
     plot_tree(
         model,
         feature_names=features,
-        class_names=[str(label) for label in model.classes_],
-        max_depth=4,
+        class_names=[str(c) for c in model.classes_],
+        max_depth=3,
         filled=True,
         rounded=True,
-        fontsize=8,
+        fontsize=10,
     )
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
 
 
-def plot_feature_importance(pipeline, output_path="reports/feature_importance"):
+def plot_feature_importance(pipeline, output_path="reports/feature_importance.png"):
     os.makedirs("reports", exist_ok=True)
     model = pipeline.named_steps["model"]
     features = _feature_names(pipeline.named_steps["preprocessor"])
@@ -95,80 +74,60 @@ def plot_feature_importance(pipeline, output_path="reports/feature_importance"):
         }
     ).sort_values("importance", ascending=False)
 
-    top15 = importance.head(15).sort_values("importance", ascending=True)
-
-    plt.figure(figsize=(10, 7))
-    plt.barh(top15["feature"], top15["importance"], color="#003478")
+    plt.figure(figsize=(10, 6))
+    plt.barh(importance["feature"].iloc[::-1], importance["importance"].iloc[::-1], color="#003478")
     plt.xlabel("Importancia")
+    plt.title("Feature Importance - Perfil")
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
 
-    importance.to_csv(f"{output_path}.csv", index=False)
+    importance.to_csv(output_path.replace(".png", ".csv"), index=False)
     return importance
 
 
-def plot_confusion_matrix(
-    pipeline,
-    x_test,
-    y_test,
-    output_path="reports/confusion_matrix_rf",
-):
+def plot_confusion_matrix(pipeline, x_test, y_test, output_path="reports/confusion_matrix_perfil.png"):
     os.makedirs("reports", exist_ok=True)
     y_pred = pipeline.predict(x_test)
-    matrix = confusion_matrix(y_test, y_pred, labels=LABELS)
-
-    display = ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=LABELS)
-    display.plot(cmap="Blues", values_format="d")
+    cm = confusion_matrix(y_test, y_pred)
+    display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=pipeline.classes_)
+    display.plot(cmap="Blues", xticks_rotation=45)
+    plt.title("Matriz de Confusao - Perfil")
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
 
 
-def main(
-    input_path="data/raw/ford_clientes_historico_completo.csv",
-    target_col="perfil_latente",
-):
+def main(input_path=VINS_PATH, target_col="perfil_cluster"):
+    if not os.path.exists(input_path):
+        print(f"Arquivo nao encontrado: {input_path}")
+        return
+
     x, y = _load_data(input_path, target_col)
     x_train, x_test, y_train, y_test = train_test_split(
-        x,
-        y,
-        test_size=0.20,
-        stratify=y,
-        random_state=RANDOM_STATE,
+        x, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
 
-    tree = _make_pipeline(
-        DecisionTreeClassifier(
-            max_depth=4,
-            class_weight="balanced",
-            random_state=RANDOM_STATE,
-        ),
-        x,
-    )
-    tree.fit(x_train, y_train)
-    plot_decision_tree(tree)
+    preprocessor = build_preprocessor_perfil()
 
-    rf = _make_pipeline(
-        RandomForestClassifier(
-            n_estimators=200,
-            class_weight="balanced",
-            max_features="sqrt",
-            random_state=RANDOM_STATE,
-            n_jobs=-1,
-        ),
-        x,
-    )
-    rf.fit(x_train, y_train)
-    importance = plot_feature_importance(rf)
-    plot_confusion_matrix(rf, x_test, y_test)
+    # Arvore de Decisao para visualizacao
+    tree_pipe = Pipeline([
+        ("preprocessor", preprocessor),
+        ("model", DecisionTreeClassifier(max_depth=3, class_weight="balanced", random_state=RANDOM_STATE))
+    ])
+    tree_pipe.fit(x_train, y_train)
+    plot_decision_tree(tree_pipe)
 
-    print("Criado reports/decision_tree")
-    print("Criado reports/feature_importance")
-    print("Criado reports/feature_importance.csv")
-    print("Criado reports/confusion_matrix_rf")
-    print("Top 3 features:")
-    print(importance.head(3).to_string(index=False))
+    # RandomForest para importancia e matriz
+    rf_pipe = Pipeline([
+        ("preprocessor", preprocessor),
+        ("model", RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=RANDOM_STATE, n_jobs=-1))
+    ])
+    rf_pipe.fit(x_train, y_train)
+    plot_feature_importance(rf_pipe)
+    plot_confusion_matrix(rf_pipe, x_test, y_test)
+
+    print("Visualizacoes geradas em reports/")
 
 
 if __name__ == "__main__":
