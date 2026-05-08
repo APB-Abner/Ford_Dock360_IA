@@ -32,7 +32,7 @@ O Ford VinGuard identifica clientes com maior probabilidade de abandonar a rede 
 `-- README.md
 ```
 
-## Principais Arquivos (Caminho B)
+## Principais Arquivos
 
 ### Pipeline Real
 
@@ -106,5 +106,3 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 pytest tests/ -v
 ```
 
----
-*Projeto desenvolvido para a disciplina de ML e Cybersecurity.*
