@@ -1,52 +1,72 @@
 """
-Classificador de Churn — Caminho B (dataset real Ford)
+Classificador de risco de abandono no pos-venda.
 
-Substitui train_churn.py original. Treina classificador binario para prever
-churn (18 meses sem servico) usando APENAS features disponiveis no momento da venda.
-
-Features (mesmas do classificador de perfil — sem leakage):
-  - modelo, ano_modelo, dias_ate_entrega, idade_veiculo_meses
-
-Modelo:
-  RandomForestClassifier + CalibratedClassifierCV (isotonic, cv=5)
-
-Saidas:
-  models/churn_rf_calibrated.joblib
-  reports/precision_recall_churn.png
+Treina churn_futuro_18m usando features comportamentais calculadas somente
+ate DATA_CORTE. O target vem exclusivamente de eventos posteriores a DATA_CORTE.
 """
 
 import os
 
-import joblib
 import matplotlib
 matplotlib.use("Agg")
 
+import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import PrecisionRecallDisplay, classification_report, roc_auc_score
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    PrecisionRecallDisplay,
+    classification_report,
+    confusion_matrix,
+    roc_auc_score,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from src.pipeline.config import LEAKAGE_BEHAVIORAL, N_ESTIMATORS, RANDOM_STATE, TEST_SIZE
+from src.pipeline.config import (
+    LEAKAGE_COLUMNS,
+    LEAKAGE_PATTERNS,
+    N_ESTIMATORS,
+    RANDOM_STATE,
+    SNAPSHOT_FEATURES_CATEGORICAL,
+    SNAPSHOT_FEATURES_NUMERIC,
+    TARGET_CHURN,
+    TEST_SIZE,
+)
 
 
-VINS_PATH = "data/processed/vins_agregados.csv"
-MODEL_PATH = "models/churn_rf_calibrated.joblib"
-REPORT_PATH = "reports/precision_recall_churn.png"
+VINS_PATH = "data/processed/dataset_churn_pos_venda.csv"
+MODEL_PATH = "models/churn_pos_venda_rf_calibrated.joblib"
+REPORT_PATH = "reports/precision_recall_churn_pos_venda.png"
+CONFUSION_PATH = "reports/confusion_matrix_churn_pos_venda.png"
+IMPORTANCE_PATH = "reports/feature_importance_churn_pos_venda.csv"
 
-PURCHASE_FEATURES_NUMERIC = ["ano_modelo", "dias_ate_entrega", "idade_veiculo_meses"]
-PURCHASE_FEATURES_CATEGORICAL = ["modelo"]
+FEATURES_NUMERIC = SNAPSHOT_FEATURES_NUMERIC
+FEATURES_CATEGORICAL = SNAPSHOT_FEATURES_CATEGORICAL
+
+
+def check_temporal_leakage(x, feature_cols=None):
+    feature_cols = list(feature_cols or x.columns)
+    found = []
+
+    for col in feature_cols:
+        if col in LEAKAGE_COLUMNS:
+            found.append(col)
+            continue
+        if any(pattern in col.lower() for pattern in LEAKAGE_PATTERNS):
+            found.append(col)
+
+    if found:
+        raise ValueError(f"Colunas com leakage temporal em X: {found}")
 
 
 def check_leakage(x):
-    found = [col for col in LEAKAGE_BEHAVIORAL if col in x.columns]
-    if found:
-        raise ValueError(f"Colunas comportamentais (leakage) em X: {found}")
+    check_temporal_leakage(x)
 
 
 def _build_preprocessor():
@@ -59,8 +79,8 @@ def _build_preprocessor():
         ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
     ])
     return ColumnTransformer([
-        ("numeric", numeric_pipeline, PURCHASE_FEATURES_NUMERIC),
-        ("categorical", categorical_pipeline, PURCHASE_FEATURES_CATEGORICAL),
+        ("numeric", numeric_pipeline, FEATURES_NUMERIC),
+        ("categorical", categorical_pipeline, FEATURES_CATEGORICAL),
     ], remainder="drop")
 
 
@@ -73,23 +93,49 @@ def _load_data():
 
     df = pd.read_csv(VINS_PATH)
 
-    feature_cols = PURCHASE_FEATURES_NUMERIC + PURCHASE_FEATURES_CATEGORICAL
-    x = df[feature_cols].copy()
-    y = df["churn"].astype(int)
+    feature_cols = FEATURES_NUMERIC + FEATURES_CATEGORICAL
+    missing = [col for col in feature_cols + [TARGET_CHURN] if col not in df.columns]
+    if missing:
+        raise ValueError(f"Colunas ausentes no dataset de churn pos-venda: {missing}")
 
-    check_leakage(x)
+    x = df[feature_cols].copy()
+    y = df[TARGET_CHURN].astype(int)
+
+    check_temporal_leakage(x, feature_cols)
 
     print(f"Dataset: {len(x):,} VINs")
-    print(f"Distribuicao de churn:\n{y.value_counts(normalize=True).round(3)}")
+    if "janela_futura_observavel" in df.columns and not bool(df["janela_futura_observavel"].all()):
+        print(
+            "ALERTA: dataset contem target com janela futura incompleta. "
+            "Prefira uma DATA_CORTE mais antiga para avaliacao final."
+        )
+    print(f"Features pos-venda: {feature_cols}")
+    print(f"Distribuicao de {TARGET_CHURN}:\n{y.value_counts(normalize=True).round(3)}")
     return x, y
 
 
 def assert_metrics_not_suspicious(auc):
     if auc > 0.98:
         raise ValueError(
-            f"AUC-ROC = {auc:.4f} acima de 0.95 — suspeita de leakage. "
+            f"AUC-ROC = {auc:.4f} acima de 0.98 — suspeita de leakage. "
             f"Auditar features do X de treino."
         )
+
+
+def _save_feature_importance(model):
+    calibrated = model.calibrated_classifiers_[0]
+    estimator = getattr(calibrated, "estimator", None)
+    if estimator is None:
+        estimator = getattr(calibrated, "base_estimator")
+    preprocessor = estimator.named_steps["preprocessor"]
+    rf = estimator.named_steps["model"]
+    names = [name.split("__", 1)[-1] for name in preprocessor.get_feature_names_out()]
+    importance = pd.DataFrame({
+        "feature": names,
+        "importance": rf.feature_importances_,
+    }).sort_values("importance", ascending=False)
+    importance.to_csv(IMPORTANCE_PATH, index=False)
+    print(f"Salvo: {IMPORTANCE_PATH}")
 
 
 def train_churn_model():
@@ -125,7 +171,8 @@ def train_churn_model():
     y_pred = (y_score >= 0.5).astype(int)
 
     auc = roc_auc_score(y_test, y_score)
-    print(f"\n=== Avaliacao no teste ===")
+    print("\n=== Avaliacao holdout aleatoria estratificada ===")
+    print("Nota: para avaliacao final, prefira multiplos snapshots e split temporal.")
     print(f"AUC-ROC: {auc:.4f}")
     print(f"\n{classification_report(y_test, y_pred, target_names=['no_churn', 'churn'])}")
 
@@ -134,11 +181,22 @@ def train_churn_model():
 
     # Curva precision-recall
     PrecisionRecallDisplay.from_predictions(y_test, y_score)
-    plt.title(f"Precision-Recall — Churn (AUC = {auc:.3f})")
+    plt.title(f"Precision-Recall - Churn Pos-Venda (AUC = {auc:.3f})")
     plt.tight_layout()
     plt.savefig(REPORT_PATH, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"\nSalvo: {REPORT_PATH}")
+
+    cm = confusion_matrix(y_test, y_pred, labels=[0, 1])
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["no_churn", "churn"])
+    disp.plot(cmap="Blues", values_format="d")
+    plt.title("Matriz de Confusao - Churn Pos-Venda")
+    plt.tight_layout()
+    plt.savefig(CONFUSION_PATH, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Salvo: {CONFUSION_PATH}")
+
+    _save_feature_importance(model)
 
     # Salvar modelo
     joblib.dump(model, MODEL_PATH, compress=3)

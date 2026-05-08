@@ -1,35 +1,22 @@
 """
-Feature Engineering — Caminho B (dataset real Ford)
+Feature engineering pos-venda - dados reais Ford.
 
-Transforma o dataset de ordens de servico (1 linha = 1 evento) em uma tabela
-agregada por VIN (1 linha = 1 veiculo) com features derivadas e targets.
-
-Saidas:
-  data/processed/vins_agregados.csv — features + target de churn por VIN
-
-Targets:
-  - churn (binario): 1 se VIN sem servico ha mais de 18 meses, 0 caso contrario
-  - perfil_cluster: gerado em etapa posterior (clustering_real.py)
-
-Decisoes de negocio:
-  - Janela de churn: 18 meses (padrao industria automotiva)
-  - Data de referencia: ServiceDate maximo do dataset
-  - Outliers de KM acima de 500.000 sao tratados como NaN (erros de digitacao)
+Gera uma linha por VIN usando somente historico de servicos ate DATA_CORTE.
+O target observa retorno futuro dentro da janela operacional de churn.
 """
 
 import os
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from src.pipeline.config import RANDOM_STATE
+from src.pipeline.config import DATA_CORTE, JANELA_CHURN_MESES, TARGET_CHURN
 
 
 INPUT_PATH = "data/raw/vin_share_Desafio_02.xlsx"
-OUTPUT_PATH = "data/processed/vins_agregados.csv"
+OUTPUT_PATH = "data/processed/snapshots_pos_venda.csv"
+CHURN_DATASET_PATH = "data/processed/dataset_churn_pos_venda.csv"
 SHEET_NAME = "vin_share"
-JANELA_CHURN_MESES = 18
 KM_OUTLIER_THRESHOLD = 500_000
 
 
@@ -51,70 +38,140 @@ def parsear_datas(df):
     ]
     for col in date_cols:
         if col in df.columns:
-            df[col + "_dt"] = pd.to_datetime(df[col], format="%m/%d/%Y", errors="coerce")
+            parsed = pd.to_datetime(df[col], format="%m/%d/%Y", errors="coerce")
+            if parsed.isna().mean() > 0.90:
+                parsed = pd.to_datetime(df[col], errors="coerce")
+            df[col + "_dt"] = parsed
     return df
 
 
 def limpar_outliers(df):
-    df.loc[df["KM"] > KM_OUTLIER_THRESHOLD, "KM"] = np.nan
-    df.loc[df["KM"] < 0, "KM"] = np.nan
+    if "KM" in df.columns:
+        df.loc[df["KM"] > KM_OUTLIER_THRESHOLD, "KM"] = np.nan
+        df.loc[df["KM"] < 0, "KM"] = np.nan
     return df
 
 
-def agregar_por_vin(df, ref_date):
-    print(f"Data de referencia: {ref_date}")
+def _validar_janela_observacao(df, data_corte, janela_churn_meses):
+    fim_janela = data_corte + pd.DateOffset(months=janela_churn_meses)
+    data_max = df["ServiceDate_dt"].max()
+    janela_observavel = bool(pd.notna(data_max) and data_max >= fim_janela)
 
-    agg = df.groupby("VIN_Hash").agg(
-        qtde_revisoes=("MaintenanceID", "count"),
-        primeiro_servico=("ServiceDate_dt", "min"),
-        ultimo_servico=("ServiceDate_dt", "max"),
-        modelo=("ModelName", "first"),
-        ano_modelo=("ModelYear", "first"),
-        dealer_code=("DealerCode", "first"),
-        n_dealers_usados=("DealerCode", "nunique"),
-        km_max=("KM", "max"),
-        sales_date=("SalesDate_dt", "first"),
-        delivery_date=("DeliveryDate_dt", "first"),
-        warranty_date=("WarrantyStartDate_dt", "first"),
-        pct_agenda=("IsAgendaSchedule", "mean"),
-    ).reset_index()
+    print(f"Data de corte: {data_corte.date()}")
+    print(f"Fim da janela futura ({janela_churn_meses}m): {fim_janela.date()}")
+    print(f"Maior ServiceDate na base: {data_max.date() if pd.notna(data_max) else 'NaT'}")
 
-    # Features derivadas
-    agg["dias_desde_ultimo_servico"] = (ref_date - agg["ultimo_servico"]).dt.days
-    agg["meses_desde_ultimo_servico"] = (agg["dias_desde_ultimo_servico"] / 30.44).round(2)
-    agg["meses_relacionamento"] = ((agg["ultimo_servico"] - agg["primeiro_servico"]).dt.days / 30.44).round(2)
-    agg["dias_ate_primeira_revisao"] = (agg["primeiro_servico"] - agg["sales_date"]).dt.days
-    agg["dias_ate_entrega"] = (agg["delivery_date"] - agg["sales_date"]).dt.days
-    agg["idade_veiculo_meses"] = ((ref_date - agg["sales_date"]).dt.days / 30.44).round(2)
+    if not janela_observavel:
+        print(
+            "ALERTA: a base nao cobre a janela futura completa para esta data de corte. "
+            "O target fica censurado; use uma DATA_CORTE mais antiga para avaliacao final."
+        )
+    return fim_janela, data_max, janela_observavel
 
-    # Intervalo medio entre revisoes
-    agg["intervalo_medio_revisoes_dias"] = np.where(
-        agg["qtde_revisoes"] > 1,
-        ((agg["ultimo_servico"] - agg["primeiro_servico"]).dt.days / (agg["qtde_revisoes"] - 1)),
+
+def build_snapshot(df, data_corte, janela_churn_meses=JANELA_CHURN_MESES):
+    data_corte = pd.Timestamp(data_corte)
+    df = parsear_datas(df.copy())
+    df = limpar_outliers(df)
+    df = df[df["ServiceDate_dt"].notna()].copy()
+
+    fim_janela, data_max, janela_observavel = _validar_janela_observacao(
+        df, data_corte, janela_churn_meses
+    )
+
+    historico = df[df["ServiceDate_dt"] <= data_corte].copy()
+    futuro = df[
+        (df["ServiceDate_dt"] > data_corte)
+        & (df["ServiceDate_dt"] <= fim_janela)
+    ].copy()
+
+    if historico.empty:
+        raise ValueError("Nenhum evento de servico encontrado ate a DATA_CORTE.")
+
+    agg_spec = {
+        "qtde_revisoes_ate_corte": ("MaintenanceID", "count"),
+        "primeiro_servico_ate_corte": ("ServiceDate_dt", "min"),
+        "ultimo_servico_ate_corte": ("ServiceDate_dt", "max"),
+        "modelo": ("ModelName", "first"),
+        "ano_modelo": ("ModelYear", "first"),
+        "dealer_code_ate_corte": ("DealerCode", "first"),
+        "n_dealers_usados_ate_corte": ("DealerCode", "nunique"),
+        "km_max_ate_corte": ("KM", "max"),
+        "sales_date": ("SalesDate_dt", "first"),
+        "delivery_date": ("DeliveryDate_dt", "first"),
+        "warranty_date": ("WarrantyStartDate_dt", "first"),
+    }
+    if "IsAgendaSchedule" in historico.columns:
+        agg_spec["pct_agenda_ate_corte"] = ("IsAgendaSchedule", "mean")
+
+    snapshot = historico.groupby("VIN_Hash").agg(**agg_spec).reset_index()
+    if "pct_agenda_ate_corte" not in snapshot.columns:
+        snapshot["pct_agenda_ate_corte"] = np.nan
+
+    snapshot["dias_desde_ultimo_servico_ate_corte"] = (
+        data_corte - snapshot["ultimo_servico_ate_corte"]
+    ).dt.days
+    snapshot["meses_desde_ultimo_servico_ate_corte"] = (
+        snapshot["dias_desde_ultimo_servico_ate_corte"] / 30.44
+    ).round(2)
+    snapshot["meses_relacionamento_ate_corte"] = (
+        (snapshot["ultimo_servico_ate_corte"] - snapshot["primeiro_servico_ate_corte"]).dt.days / 30.44
+    ).round(2)
+    snapshot["dias_ate_primeira_revisao"] = (
+        snapshot["primeiro_servico_ate_corte"] - snapshot["sales_date"]
+    ).dt.days
+    snapshot["dias_ate_entrega"] = (snapshot["delivery_date"] - snapshot["sales_date"]).dt.days
+    snapshot["idade_veiculo_meses_ate_corte"] = (
+        (data_corte - snapshot["sales_date"]).dt.days / 30.44
+    ).round(2)
+    snapshot["intervalo_medio_revisoes_dias_ate_corte"] = np.where(
+        snapshot["qtde_revisoes_ate_corte"] > 1,
+        (
+            (snapshot["ultimo_servico_ate_corte"] - snapshot["primeiro_servico_ate_corte"]).dt.days
+            / (snapshot["qtde_revisoes_ate_corte"] - 1)
+        ),
         np.nan,
     )
 
-    # Target binario de churn
-    agg["churn"] = (agg["meses_desde_ultimo_servico"] > JANELA_CHURN_MESES).astype(int)
+    retorno = futuro.groupby("VIN_Hash").agg(
+        qtd_servicos_pos_corte=("MaintenanceID", "count"),
+        primeiro_servico_pos_corte=("ServiceDate_dt", "min"),
+        ultimo_servico_pos_corte=("ServiceDate_dt", "max"),
+    ).reset_index()
 
-    return agg
+    snapshot = snapshot.merge(retorno, on="VIN_Hash", how="left")
+    snapshot["qtd_servicos_pos_corte"] = snapshot["qtd_servicos_pos_corte"].fillna(0).astype(int)
+    snapshot["voltou_pos_corte"] = snapshot["qtd_servicos_pos_corte"] > 0
+    snapshot[TARGET_CHURN] = (~snapshot["voltou_pos_corte"]).astype(int)
+    snapshot["data_corte"] = data_corte
+    snapshot["fim_janela_churn"] = fim_janela
+    snapshot["data_max_observada"] = data_max
+    snapshot["janela_futura_observavel"] = janela_observavel
+
+    # Alias temporario para notebooks antigos; nao usar em novos treinos.
+    snapshot["churn"] = snapshot[TARGET_CHURN]
+    return snapshot
 
 
-def validar_agregado(agg):
-    print("\n=== VALIDACAO ===")
-    print(f"VINs unicos: {len(agg):,}")
-    print(f"\nDistribuicao de churn (janela {JANELA_CHURN_MESES}m):")
-    print(agg["churn"].value_counts(normalize=True).round(4))
+def validar_snapshot(snapshot):
+    print("\n=== VALIDACAO SNAPSHOT POS-VENDA ===")
+    print(f"VINs com historico ate corte: {len(snapshot):,}")
+    print(f"\nDistribuicao de {TARGET_CHURN}:")
+    print(snapshot[TARGET_CHURN].value_counts(normalize=True).round(4))
 
-    print(f"\nDistribuicao por modelo (top 10):")
-    print(agg["modelo"].value_counts().head(10))
+    print("\nDistribuicao por modelo (top 10):")
+    print(snapshot["modelo"].value_counts().head(10))
 
-    print(f"\nMissing values relevantes:")
-    cols_check = ["km_max", "dias_ate_primeira_revisao", "dias_ate_entrega",
-                  "intervalo_medio_revisoes_dias", "ano_modelo"]
+    print("\nMissing values relevantes:")
+    cols_check = [
+        "km_max_ate_corte",
+        "dias_ate_primeira_revisao",
+        "intervalo_medio_revisoes_dias_ate_corte",
+        "ano_modelo",
+    ]
     for col in cols_check:
-        n_missing = agg[col].isna().sum()
-        pct = n_missing / len(agg) * 100
+        n_missing = snapshot[col].isna().sum()
+        pct = n_missing / len(snapshot) * 100
         print(f"  {col}: {n_missing:,} ({pct:.2f}%)")
 
 
@@ -122,18 +179,15 @@ def main():
     os.makedirs("data/processed", exist_ok=True)
 
     df = carregar_ordens_servico()
-    df = parsear_datas(df)
-    df = limpar_outliers(df)
+    snapshot = build_snapshot(df, DATA_CORTE, JANELA_CHURN_MESES)
+    validar_snapshot(snapshot)
 
-    ref_date = df["ServiceDate_dt"].max()
-    agg = agregar_por_vin(df, ref_date)
-
-    validar_agregado(agg)
-
-    agg.to_csv(OUTPUT_PATH, index=False)
+    snapshot.to_csv(OUTPUT_PATH, index=False)
+    snapshot.to_csv(CHURN_DATASET_PATH, index=False)
     print(f"\nSalvo em: {OUTPUT_PATH}")
-    print(f"Shape: {agg.shape}")
-    return agg
+    print(f"Salvo em: {CHURN_DATASET_PATH}")
+    print(f"Shape: {snapshot.shape}")
+    return snapshot
 
 
 if __name__ == "__main__":

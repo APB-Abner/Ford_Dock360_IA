@@ -1,9 +1,4 @@
-"""
-Visualizacoes — Caminho B (dataset real Ford)
-
-Gera graficos de importancia de features, arvore de decisao e matriz de confusao
-usando o dataset agregado por VIN (vins_agregados.csv).
-"""
+"""Visualizacoes simples para o classificador experimental de segmento pos-venda."""
 
 import matplotlib
 matplotlib.use("Agg")
@@ -18,20 +13,20 @@ from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 
 from src.pipeline.config import (
-    PURCHASE_FEATURES_CATEGORICAL,
-    PURCHASE_FEATURES_NUMERIC,
     RANDOM_STATE,
     TEST_SIZE,
 )
+from src.pipeline.train_classifier_real import EXPERIMENT_FEATURES_CATEGORICAL, EXPERIMENT_FEATURES_NUMERIC
 from src.pipeline.train_classifier_real import _build_preprocessor as build_preprocessor_perfil
 from src.pipeline.train_churn_real import check_leakage
 
-VINS_PATH = "data/processed/vins_agregados.csv"
+VINS_PATH = "data/processed/snapshots_pos_venda.csv"
+SEGMENTOS_PATH = "data/processed/segmentos_pos_venda.csv"
 
 
 def _load_data(input_path, target_col):
-    df = pd.read_csv(input_path)
-    feature_cols = PURCHASE_FEATURES_NUMERIC + PURCHASE_FEATURES_CATEGORICAL
+    df = pd.read_csv(input_path).merge(pd.read_csv(SEGMENTOS_PATH), on="VIN_Hash", how="inner")
+    feature_cols = EXPERIMENT_FEATURES_NUMERIC + EXPERIMENT_FEATURES_CATEGORICAL
     x = df[feature_cols].copy()
     y = df[target_col]
     check_leakage(x)
@@ -63,7 +58,7 @@ def plot_decision_tree(pipeline, output_path="reports/decision_tree.png"):
     plt.close()
 
 
-def plot_feature_importance(pipeline, output_path="reports/feature_importance.png"):
+def plot_feature_importance(pipeline, output_path="reports/feature_importance_segmento_experimental.png"):
     os.makedirs("reports", exist_ok=True)
     model = pipeline.named_steps["model"]
     features = _feature_names(pipeline.named_steps["preprocessor"])
@@ -77,7 +72,7 @@ def plot_feature_importance(pipeline, output_path="reports/feature_importance.pn
     plt.figure(figsize=(10, 6))
     plt.barh(importance["feature"].iloc[::-1], importance["importance"].iloc[::-1], color="#003478")
     plt.xlabel("Importancia")
-    plt.title("Feature Importance - Perfil")
+    plt.title("Feature Importance - Segmento Experimental")
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
@@ -86,19 +81,19 @@ def plot_feature_importance(pipeline, output_path="reports/feature_importance.pn
     return importance
 
 
-def plot_confusion_matrix(pipeline, x_test, y_test, output_path="reports/confusion_matrix_perfil.png"):
+def plot_confusion_matrix(pipeline, x_test, y_test, output_path="reports/confusion_matrix_segmento_experimental.png"):
     os.makedirs("reports", exist_ok=True)
     y_pred = pipeline.predict(x_test)
     cm = confusion_matrix(y_test, y_pred)
     display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=pipeline.classes_)
     display.plot(cmap="Blues", xticks_rotation=45)
-    plt.title("Matriz de Confusao - Perfil")
+    plt.title("Matriz de Confusao - Segmento Experimental")
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
 
 
-def main(input_path=VINS_PATH, target_col="perfil_cluster"):
+def main(input_path=VINS_PATH, target_col="segmento_pos_venda"):
     if not os.path.exists(input_path):
         print(f"Arquivo nao encontrado: {input_path}")
         return

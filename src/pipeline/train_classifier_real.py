@@ -1,30 +1,22 @@
 """
-Classificador de Perfil — Caminho B (dataset real Ford)
+Classificador experimental de segmento pos-venda.
 
-Substitui train_classifier.py original. Treina classificador multiclasse para
-prever o perfil_cluster usando APENAS features disponiveis no momento da venda.
-
-Features de compra disponiveis no dataset real:
-  - modelo (categorico)
-  - ano_modelo (numerico)
-  - dealer_code (categorico de alta cardinalidade)
-  - dias_ate_entrega (numerico)
-  - idade_veiculo_meses (numerico - calculado em relacao a data ref)
+Este script nao e componente principal do pipeline. O caminho recomendado e usar
+o K-Means salvo em models/kmeans_segmentador_pos_venda.joblib para segmentar o
+comportamento atual do VIN. Este experimento apenas testa se o segmento pode ser
+aproximado com poucas features resumidas.
 
 Modelos comparados:
   1. Logistic Regression (baseline)
   2. Decision Tree max_depth=4 (explicavel)
   3. Random Forest (producao)
 
-Anti-leakage: features comportamentais (qtde_revisoes, meses_*, n_dealers,
-km_max, pct_agenda) sao PROIBIDAS aqui pois nao existem no momento da compra.
-
 Saidas:
-  models/perfil_rf_classifier.joblib
-  reports/model_comparison.csv
-  reports/decision_tree.png
-  reports/feature_importance.png
-  reports/confusion_matrix_rf.png
+  models/segmento_pos_venda_classifier_experimental.joblib
+  reports/model_comparison_segmento_experimental.csv
+  reports/decision_tree_segmento_experimental.png
+  reports/feature_importance_segmento_experimental.png
+  reports/confusion_matrix_segmento_experimental.png
 """
 
 import os
@@ -50,21 +42,20 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 
-from src.pipeline.config import LEAKAGE_BEHAVIORAL, RANDOM_STATE, TEST_SIZE
+from src.pipeline.config import RANDOM_STATE, TEST_SIZE
+from src.pipeline.train_churn_real import check_temporal_leakage
 
 
-VINS_PATH = "data/processed/vins_agregados.csv"
-LABELS_PATH = "data/processed/cluster_labels.csv"
+VINS_PATH = "data/processed/snapshots_pos_venda.csv"
+LABELS_PATH = "data/processed/segmentos_pos_venda.csv"
 
-# Features disponiveis no MOMENTO DA COMPRA (sem leakage)
-PURCHASE_FEATURES_NUMERIC = ["ano_modelo", "dias_ate_entrega", "idade_veiculo_meses"]
-PURCHASE_FEATURES_CATEGORICAL = ["modelo"]
+EXPERIMENT_FEATURES_NUMERIC = ["ano_modelo", "idade_veiculo_meses_ate_corte"]
+EXPERIMENT_FEATURES_CATEGORICAL = ["modelo"]
+MODEL_PATH = "models/segmento_pos_venda_classifier_experimental.joblib"
 
 
 def check_leakage(x):
-    found = [col for col in LEAKAGE_BEHAVIORAL if col in x.columns]
-    if found:
-        raise ValueError(f"Colunas comportamentais (leakage) em X: {found}")
+    check_temporal_leakage(x)
 
 
 def _build_preprocessor():
@@ -77,8 +68,8 @@ def _build_preprocessor():
         ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
     ])
     return ColumnTransformer([
-        ("numeric", numeric_pipeline, PURCHASE_FEATURES_NUMERIC),
-        ("categorical", categorical_pipeline, PURCHASE_FEATURES_CATEGORICAL),
+        ("numeric", numeric_pipeline, EXPERIMENT_FEATURES_NUMERIC),
+        ("categorical", categorical_pipeline, EXPERIMENT_FEATURES_CATEGORICAL),
     ], remainder="drop")
 
 
@@ -91,19 +82,19 @@ def _load_data():
     vins = pd.read_csv(VINS_PATH)
     labels = pd.read_csv(LABELS_PATH)
 
-    df = vins.merge(labels[["cliente_id", "perfil_cluster"]],
-                    left_on="VIN_Hash", right_on="cliente_id", how="inner")
+    df = vins.merge(labels[["VIN_Hash", "segmento_pos_venda"]], on="VIN_Hash", how="inner")
 
-    feature_cols = PURCHASE_FEATURES_NUMERIC + PURCHASE_FEATURES_CATEGORICAL
+    feature_cols = EXPERIMENT_FEATURES_NUMERIC + EXPERIMENT_FEATURES_CATEGORICAL
     x = df[feature_cols].copy()
-    y = df["perfil_cluster"].copy()
+    y = df["segmento_pos_venda"].copy()
 
     # Filtrar linhas sem perfil
     mask = y.notna()
     x, y = x[mask], y[mask]
 
     check_leakage(x)
-    print(f"Dataset: {len(x):,} VINs | Features: {feature_cols}")
+    print("EXPERIMENTO: o segmentador K-Means e o componente principal do pipeline.")
+    print(f"Dataset: {len(x):,} VINs | Features resumidas: {feature_cols}")
     print(f"Distribuicao de y:\n{y.value_counts(normalize=True).round(3)}")
     return x, y
 
@@ -167,7 +158,7 @@ def train_all_models():
         print(f"\n{classification_report(y_test, y_pred)}")
 
     comparison = pd.DataFrame(rows).sort_values("f1_macro_test", ascending=False)
-    comparison.to_csv("reports/model_comparison.csv", index=False)
+    comparison.to_csv("reports/model_comparison_segmento_experimental.csv", index=False)
     print("\n=== Comparativo final ===")
     print(comparison.to_string(index=False))
 
@@ -175,10 +166,10 @@ def train_all_models():
     best_f1 = comparison["f1_macro_test"].max()
     assert_metrics_not_suspicious(best_f1)
 
-    # Salvar Random Forest (modelo de producao)
+    # Salvar Random Forest experimental. F1 baixo nao bloqueia o projeto principal.
     rf_pipeline = pipelines["RandomForest"]
-    joblib.dump(rf_pipeline, "models/perfil_rf_classifier.joblib", compress=3)
-    print("\nSalvo: models/perfil_rf_classifier.joblib")
+    joblib.dump(rf_pipeline, MODEL_PATH, compress=3)
+    print(f"\nSalvo: {MODEL_PATH}")
 
     # Visualizacoes
     _plot_decision_tree(pipelines["DecisionTree"])
@@ -205,9 +196,9 @@ def _plot_decision_tree(pipeline):
         max_depth=4, filled=True, rounded=True, fontsize=8,
     )
     plt.tight_layout()
-    plt.savefig("reports/decision_tree.png", dpi=150, bbox_inches="tight")
+    plt.savefig("reports/decision_tree_segmento_experimental.png", dpi=150, bbox_inches="tight")
     plt.close()
-    print("Salvo: reports/decision_tree.png")
+    print("Salvo: reports/decision_tree_segmento_experimental.png")
 
 
 def _plot_feature_importance(pipeline):
@@ -224,11 +215,11 @@ def _plot_feature_importance(pipeline):
     plt.figure(figsize=(10, 6))
     plt.barh(top15["feature"], top15["importance"], color="#003478")
     plt.xlabel("Importancia")
-    plt.title("Top 15 Features — Random Forest (Perfil)")
+    plt.title("Top 15 Features - Segmento Experimental")
     plt.tight_layout()
-    plt.savefig("reports/feature_importance.png", dpi=150, bbox_inches="tight")
+    plt.savefig("reports/feature_importance_segmento_experimental.png", dpi=150, bbox_inches="tight")
     plt.close()
-    print("Salvo: reports/feature_importance.png")
+    print("Salvo: reports/feature_importance_segmento_experimental.png")
 
 
 def _plot_confusion_matrix(pipeline, x_test, y_test):
@@ -237,11 +228,11 @@ def _plot_confusion_matrix(pipeline, x_test, y_test):
     cm = confusion_matrix(y_test, y_pred, labels=labels)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
     disp.plot(cmap="Blues", values_format="d")
-    plt.title("Matriz de Confusao — Random Forest (Perfil)")
+    plt.title("Matriz de Confusao - Segmento Experimental")
     plt.tight_layout()
-    plt.savefig("reports/confusion_matrix_rf.png", dpi=150, bbox_inches="tight")
+    plt.savefig("reports/confusion_matrix_segmento_experimental.png", dpi=150, bbox_inches="tight")
     plt.close()
-    print("Salvo: reports/confusion_matrix_rf.png")
+    print("Salvo: reports/confusion_matrix_segmento_experimental.png")
 
 
 if __name__ == "__main__":

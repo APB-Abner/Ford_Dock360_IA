@@ -1,22 +1,8 @@
 """
-Clustering K-Means — Caminho B (dataset real Ford)
+Segmentacao comportamental pos-venda por K-Means.
 
-Substitui clustering.py original. Agrupa VINs em 4 perfis comportamentais
-usando features agregadas de servicos reais.
-
-Features de clustering (todas comportamentais — sem leakage para classificacao):
-  - qtde_revisoes
-  - meses_desde_ultimo_servico
-  - meses_relacionamento
-  - n_dealers_usados
-  - km_max
-  - pct_agenda
-  - intervalo_medio_revisoes_dias
-
-Saidas:
-  data/processed/cluster_labels.csv — cliente_id (VIN_Hash) + perfil_cluster
-  reports/elbow_silhouette.png
-  reports/clusters_pca.png
+Usa somente features de servico calculadas ate a data de corte. Os nomes dos
+segmentos sao neutros e devem ser validados com negocio antes de uso comercial.
 """
 
 import matplotlib
@@ -24,6 +10,7 @@ matplotlib.use("Agg")
 
 import os
 
+import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -34,23 +21,15 @@ from sklearn.metrics import silhouette_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.pipeline.config import RANDOM_STATE
+from src.pipeline.config import CLUSTER_FEATURES_POS_VENDA, N_CLUSTERS, RANDOM_STATE
 
 
-INPUT_PATH = "data/processed/vins_agregados.csv"
-OUTPUT_LABELS = "data/processed/cluster_labels.csv"
-
-CLUSTER_FEATURES = [
-    "qtde_revisoes",
-    "meses_desde_ultimo_servico",
-    "meses_relacionamento",
-    "n_dealers_usados",
-    "km_max",
-    "pct_agenda",
-    "intervalo_medio_revisoes_dias",
-]
-
-PERFIS = ["fiel", "economico", "abandono", "esquecido"]
+INPUT_PATH = "data/processed/snapshots_pos_venda.csv"
+OUTPUT_LABELS = "data/processed/segmentos_pos_venda.csv"
+MODEL_PATH = "models/kmeans_segmentador_pos_venda.joblib"
+ELBOW_PATH = "reports/elbow_silhouette_pos_venda.png"
+PCA_PATH = "reports/clusters_pca_pos_venda.png"
+CLUSTER_FEATURES = CLUSTER_FEATURES_POS_VENDA
 
 
 def _make_pipeline(n_clusters):
@@ -63,12 +42,11 @@ def _make_pipeline(n_clusters):
 
 def _interpretar_clusters(df, labels):
     """
-    Mapeia cluster -> nome de negocio com base nos centroides.
-    Heuristica baseada nas features comportamentais:
-      - fiel: muitas revisoes, baixo tempo desde ultimo servico, alta agenda
-      - abandono: poucas revisoes, alto tempo desde ultimo servico
-      - economico: muitos dealers diferentes (shopping around)
-      - esquecido: longos intervalos entre revisoes
+    Mapeia cluster -> segmento neutro com base nos centroides.
+      - recorrente: muitas revisoes e baixo tempo desde ultimo servico
+      - inativo: maior tempo desde ultimo servico ate a data de corte
+      - multidealer: mais dealers diferentes
+      - baixo_engajamento: restante, geralmente menor intensidade de uso
     """
     df_c = df[CLUSTER_FEATURES].copy()
     df_c["cluster"] = labels
@@ -80,30 +58,26 @@ def _interpretar_clusters(df, labels):
     mapping = {}
     used = set()
 
-    # 1. Abandono: maior meses_desde_ultimo_servico
-    cluster_abandono = centroides["meses_desde_ultimo_servico"].idxmax()
-    mapping[cluster_abandono] = "abandono"
-    used.add("abandono")
+    cluster_inativo = centroides["meses_desde_ultimo_servico_ate_corte"].idxmax()
+    mapping[cluster_inativo] = "inativo"
+    used.add("inativo")
 
-    # 2. Fiel: maior qtde_revisoes (entre os restantes)
-    restantes = centroides.drop(cluster_abandono)
-    cluster_fiel = restantes["qtde_revisoes"].idxmax()
-    mapping[cluster_fiel] = "fiel"
-    used.add("fiel")
+    restantes = centroides.drop(cluster_inativo)
+    cluster_recorrente = restantes["qtde_revisoes_ate_corte"].idxmax()
+    mapping[cluster_recorrente] = "recorrente"
+    used.add("recorrente")
 
-    # 3. Economico: mais dealers diferentes (entre os restantes)
-    restantes = restantes.drop(cluster_fiel)
-    cluster_economico = restantes["n_dealers_usados"].idxmax()
-    mapping[cluster_economico] = "economico"
-    used.add("economico")
+    restantes = restantes.drop(cluster_recorrente)
+    cluster_multidealer = restantes["n_dealers_usados_ate_corte"].idxmax()
+    mapping[cluster_multidealer] = "multidealer"
+    used.add("multidealer")
 
-    # 4. Esquecido: o que sobrou
-    cluster_esquecido = restantes.drop(cluster_economico).index[0]
-    mapping[cluster_esquecido] = "esquecido"
+    cluster_baixo_engajamento = restantes.drop(cluster_multidealer).index[0]
+    mapping[cluster_baixo_engajamento] = "baixo_engajamento"
 
-    print(f"\n=== Mapeamento cluster -> perfil ===")
-    for cluster, perfil in sorted(mapping.items()):
-        print(f"  Cluster {cluster}: {perfil}")
+    print("\n=== Mapeamento cluster -> segmento_pos_venda ===")
+    for cluster, segmento in sorted(mapping.items()):
+        print(f"  Cluster {cluster}: {segmento}")
 
     return mapping
 
@@ -141,9 +115,9 @@ def _plot_elbow_silhouette(x):
     plt.grid(alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("reports/elbow_silhouette.png", dpi=150, bbox_inches="tight")
+    plt.savefig(ELBOW_PATH, dpi=150, bbox_inches="tight")
     plt.close()
-    print("Salvo: reports/elbow_silhouette.png")
+    print(f"Salvo: {ELBOW_PATH}")
 
 
 def _plot_pca_clusters(x, labels, pipeline, mapping):
@@ -158,38 +132,41 @@ def _plot_pca_clusters(x, labels, pipeline, mapping):
     pca = PCA(n_components=2, random_state=RANDOM_STATE)
     components = pca.fit_transform(x_sample)
 
-    cores = {"fiel": "#003478", "economico": "#FF7F0E", "abandono": "#D62728", "esquecido": "#6FA8C9"}
+    cores = {
+        "recorrente": "#003478",
+        "multidealer": "#FF7F0E",
+        "inativo": "#D62728",
+        "baixo_engajamento": "#6FA8C9",
+    }
 
     plt.figure(figsize=(10, 7))
-    for cluster_id, perfil in mapping.items():
+    for cluster_id, segmento in mapping.items():
         idx = labels_sample == cluster_id
         plt.scatter(
             components[idx, 0],
             components[idx, 1],
-            c=cores.get(perfil, "gray"),
-            label=perfil,
+            c=cores.get(segmento, "gray"),
+            label=segmento,
             alpha=0.4,
             s=8,
         )
-    plt.legend(title="Perfil")
-    plt.title("Clusters de Comportamento (PCA 2D)")
+    plt.legend(title="Segmento")
+    plt.title("Segmentos Pos-Venda (PCA 2D)")
     plt.xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% variancia)")
     plt.ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% variancia)")
     plt.tight_layout()
-    plt.savefig("reports/clusters_pca.png", dpi=150, bbox_inches="tight")
+    plt.savefig(PCA_PATH, dpi=150, bbox_inches="tight")
     plt.close()
-    print("Salvo: reports/clusters_pca.png")
+    print(f"Salvo: {PCA_PATH}")
 
 
-def run_clustering(input_path=INPUT_PATH, n_clusters=4):
+def run_clustering(input_path=INPUT_PATH, n_clusters=N_CLUSTERS):
     os.makedirs("data/processed", exist_ok=True)
+    os.makedirs("models", exist_ok=True)
     os.makedirs("reports", exist_ok=True)
 
     if not os.path.exists(input_path):
-        raise FileNotFoundError(
-            f"Arquivo nao encontrado: {input_path}\n"
-            f"Rode antes: python -m src.pipeline.feature_engineering_real"
-        )
+        raise FileNotFoundError(f"Rode antes: python -m src.pipeline.feature_engineering_real")
 
     df = pd.read_csv(input_path)
     print(f"Carregado: {df.shape[0]:,} VINs")
@@ -203,22 +180,26 @@ def run_clustering(input_path=INPUT_PATH, n_clusters=4):
     print("\n=== Selecao de k via Elbow + Silhouette ===")
     _plot_elbow_silhouette(x)
 
-    print(f"\n=== Treinando K-Means com k={n_clusters} ===")
+    print(f"\n=== Treinando segmentador K-Means pos-venda com k={n_clusters} ===")
     pipeline = _make_pipeline(n_clusters)
     labels = pipeline.fit_predict(x)
 
     mapping = _interpretar_clusters(df, labels)
+    pipeline.segment_mapping_ = mapping
+    pipeline.feature_names_in_snapshot_ = CLUSTER_FEATURES
 
     df_labels = pd.DataFrame({
-        "cliente_id": df["VIN_Hash"],
+        "VIN_Hash": df["VIN_Hash"],
         "cluster_raw": labels,
-        "perfil_cluster": pd.Series(labels).map(mapping),
+        "segmento_pos_venda": pd.Series(labels).map(mapping),
     })
     df_labels.to_csv(OUTPUT_LABELS, index=False)
     print(f"\nSalvo: {OUTPUT_LABELS}")
+    joblib.dump(pipeline, MODEL_PATH, compress=3)
+    print(f"Salvo: {MODEL_PATH}")
 
-    print(f"\n=== Distribuicao final ===")
-    print(df_labels["perfil_cluster"].value_counts(normalize=True).round(3))
+    print("\n=== Distribuicao final ===")
+    print(df_labels["segmento_pos_venda"].value_counts(normalize=True).round(3))
 
     _plot_pca_clusters(x, labels, pipeline, mapping)
 

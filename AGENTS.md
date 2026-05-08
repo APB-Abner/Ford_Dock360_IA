@@ -1,4 +1,4 @@
-# Instrucoes para o Agente — Ford VinGuard (Caminho B: dados reais)
+# Instrucoes para o Agente — Ford VinGuard (pos-venda com dados reais)
 
 ## Filosofia geral
 
@@ -18,7 +18,7 @@
 - Todo pre-processamento DENTRO de sklearn.Pipeline
 - random_state=42 obrigatorio em tudo que aceita
 - stratify=y no train_test_split de classificacao
-- F1 Macro (perfil) ou AUC-ROC (churn) como metrica principal — nunca accuracy isolada
+- F1 Macro (segmento experimental) ou AUC-ROC (churn) como metrica principal — nunca accuracy isolada
 - class_weight='balanced' obrigatorio em classificadores
 
 ## Dataset (Caminho B — dados reais Ford)
@@ -28,41 +28,59 @@ Fonte unica: data/raw/vin_share_Desafio_02.xlsx (aba 'vin_share')
 - 175.554 VINs unicos (anonimizados via hash)
 - Granularidade: 1 linha = 1 evento de manutencao
 
-## Data Leakage — regra absoluta
+## Problema correto
 
-As seguintes features sao DERIVADAS das ordens de servico e representam
-comportamento POSTERIOR a compra. JAMAIS podem aparecer no X dos classificadores:
+O projeto e POS-VENDA. O objetivo e prever risco de abandono da rede autorizada
+Ford a partir do historico parcial de servicos/manutencoes por VIN.
 
-  qtde_revisoes, meses_desde_ultimo_servico, meses_relacionamento,
-  n_dealers_usados, km_max, pct_agenda, intervalo_medio_revisoes_dias,
-  dias_ate_primeira_revisao, primeiro_servico, ultimo_servico, churn
+Fluxo metodologico:
+historico de servico ate uma data de corte -> features comportamentais ate corte
+-> abandono futuro -> segmentacao comportamental pos-venda -> acao de retencao.
 
-Features permitidas (momento da compra):
-  modelo, ano_modelo, dias_ate_entrega, idade_veiculo_meses
+Nao tratar o projeto como previsao no ato da compra.
+
+## Data Leakage temporal — regra absoluta
+
+As features do X devem ser calculadas apenas com ServiceDate <= DATA_CORTE.
+O target deve ser calculado apenas com ServiceDate > DATA_CORTE.
+
+Nunca usar no X colunas pos-corte, futuro, target, churn ou voltou, por exemplo:
+  churn_futuro_18m, voltou_pos_corte, primeiro_servico_pos_corte,
+  ultimo_servico_pos_corte, qtd_servicos_pos_corte
+
+Features comportamentais permitidas quando calculadas ate a data de corte:
+  qtde_revisoes_ate_corte, meses_desde_ultimo_servico_ate_corte,
+  meses_relacionamento_ate_corte, n_dealers_usados_ate_corte,
+  km_max_ate_corte, pct_agenda_ate_corte,
+  intervalo_medio_revisoes_dias_ate_corte, dias_ate_primeira_revisao,
+  idade_veiculo_meses_ate_corte, modelo, ano_modelo
 
 ## Targets
 
-- churn (binario): 1 se VIN sem servico ha mais de 18 meses, senao 0
-- perfil_cluster: derivado por K-Means nas features comportamentais (gerado por clustering_real.py)
+- churn_futuro_18m: 1 se VIN nao tiver servico em (DATA_CORTE, DATA_CORTE + 18 meses], senao 0
+- segmento_pos_venda: derivado por K-Means nas features comportamentais ate corte
 
 ## Pipeline (ordem de execucao)
 
-1. python -m src.pipeline.feature_engineering_real  # agrega VIN-level
-2. python -m src.pipeline.clustering_real           # gera perfis
-3. python -m src.pipeline.train_classifier_real     # classificador de perfil
-4. python -m src.pipeline.train_churn_real          # classificador de churn
+1. python -m src.pipeline.feature_engineering_real  # snapshot temporal por VIN
+2. python -m src.pipeline.clustering_real           # segmentacao pos-venda
+3. python -m src.pipeline.train_churn_real          # risco de abandono pos-venda
+
+Opcional/experimental:
+4. python -m src.pipeline.train_classifier_real
 
 ## Estrutura
 
-- src/pipeline/feature_engineering_real.py : agregacao por VIN
-- src/pipeline/clustering_real.py          : K-Means + nomenclatura de perfis
-- src/pipeline/train_classifier_real.py    : LogReg + DT + RF para perfil
-- src/pipeline/train_churn_real.py         : RF calibrado para churn
+- src/pipeline/feature_engineering_real.py : snapshot pos-venda por VIN
+- src/pipeline/clustering_real.py          : K-Means + segmentos pos-venda neutros
+- src/pipeline/train_classifier_real.py    : experimento secundario de segmento
+- src/pipeline/train_churn_real.py         : RF calibrado para abandono pos-venda
 - data/raw/vin_share_Desafio_02.xlsx       : dataset real Ford
-- data/processed/vins_agregados.csv         : 1 linha por VIN com features+target
-- data/processed/cluster_labels.csv         : VIN_Hash + perfil_cluster
-- models/perfil_rf_classifier.joblib        : modelo de perfil
-- models/churn_rf_calibrated.joblib         : modelo de churn
+- data/processed/snapshots_pos_venda.csv    : 1 linha por VIN com features ate corte
+- data/processed/dataset_churn_pos_venda.csv: dataset de treino de churn pos-venda
+- data/processed/segmentos_pos_venda.csv    : VIN_Hash + segmento_pos_venda
+- models/kmeans_segmentador_pos_venda.joblib: pipeline de segmentacao
+- models/churn_pos_venda_rf_calibrated.joblib: modelo de churn pos-venda
 
 ## Graficos
 

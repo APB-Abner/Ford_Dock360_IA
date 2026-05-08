@@ -1,15 +1,10 @@
-"""
-MLflow Tracking — Caminho B (dataset real Ford)
-
-Registra experimentos de clustering, classificacao de perfil e churn
-usando o dataset agregado por VIN (vins_agregados.csv).
-"""
+"""MLflow Tracking para experimentos pos-venda com snapshots por VIN."""
 
 import mlflow
 import mlflow.sklearn
 import pandas as pd
 from mlflow.tracking import MlflowClient
-from sklearn.metrics import adjusted_rand_score, f1_score, roc_auc_score
+from sklearn.metrics import f1_score, roc_auc_score, silhouette_score
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -18,17 +13,21 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 
 from src.pipeline.config import (
-    LEAKAGE_BEHAVIORAL,
-    PURCHASE_FEATURES_CATEGORICAL,
-    PURCHASE_FEATURES_NUMERIC,
+    CLUSTER_FEATURES_POS_VENDA,
     RANDOM_STATE,
+    SNAPSHOT_FEATURES_CATEGORICAL,
+    SNAPSHOT_FEATURES_NUMERIC,
+    TARGET_CHURN,
     TEST_SIZE,
 )
-from src.pipeline.clustering_real import _evaluate_k_candidates
+from src.pipeline.clustering_real import _make_pipeline
+from src.pipeline.train_classifier_real import EXPERIMENT_FEATURES_CATEGORICAL, EXPERIMENT_FEATURES_NUMERIC
 from src.pipeline.train_classifier_real import _build_preprocessor as build_preprocessor_perfil
 from src.pipeline.train_churn_real import _build_preprocessor as build_preprocessor_churn
+from src.pipeline.train_churn_real import check_temporal_leakage
 
-VINS_PATH = "data/processed/vins_agregados.csv"
+VINS_PATH = "data/processed/dataset_churn_pos_venda.csv"
+SEGMENTOS_PATH = "data/processed/segmentos_pos_venda.csv"
 TRACKING_URI = "file:./mlruns"
 
 
@@ -47,11 +46,22 @@ def register_kmeans_experiment(experiment_name="ford_segmentacao_kmeans"):
     mlflow.set_experiment(experiment_name)
 
     df = _load_data()
-    # Features comportamentais (exceto churn)
-    segmentation_features = [c for c in LEAKAGE_BEHAVIORAL if c != "churn"]
-    x = df[segmentation_features].fillna(0)
+    x = df[CLUSTER_FEATURES_POS_VENDA]
 
-    candidate_rows, best = _evaluate_k_candidates(x, len(df))
+    candidate_rows = []
+    for k in range(2, 9):
+        pipeline = _make_pipeline(k)
+        labels = pipeline.fit_predict(x)
+        x_scaled = pipeline[:-1].transform(x)
+        sample_size = min(10000, len(x))
+        candidate_rows.append({
+            "k": k,
+            "silhouette_score": silhouette_score(
+                x_scaled, labels, sample_size=sample_size, random_state=RANDOM_STATE
+            ),
+            "inertia": pipeline.named_steps["kmeans"].inertia_,
+        })
+    best = max(candidate_rows, key=lambda row: row["silhouette_score"])
 
     for row in candidate_rows:
         with mlflow.start_run(run_name=f"kmeans_k_{row['k']}"):
@@ -67,17 +77,21 @@ def register_kmeans_experiment(experiment_name="ford_segmentacao_kmeans"):
     return pd.DataFrame(candidate_rows)
 
 
-def register_perfil_classifier(experiment_name="ford_classificacao_perfil", model_name="ford_perfil_classifier"):
+def register_perfil_classifier(
+    experiment_name="ford_segmento_classifier_experimental",
+    model_name="ford_segmento_classifier_experimental",
+):
     client = setup_mlflow()
     mlflow.set_experiment(experiment_name)
 
-    df = _load_data()
-    if "perfil_cluster" not in df.columns:
-        raise ValueError("Rode o clustering antes para gerar perfil_cluster")
+    df = _load_data().merge(pd.read_csv(SEGMENTOS_PATH), on="VIN_Hash", how="inner")
+    if "segmento_pos_venda" not in df.columns:
+        raise ValueError("Rode o clustering antes para gerar segmento_pos_venda")
 
-    feature_cols = PURCHASE_FEATURES_NUMERIC + PURCHASE_FEATURES_CATEGORICAL
+    feature_cols = EXPERIMENT_FEATURES_NUMERIC + EXPERIMENT_FEATURES_CATEGORICAL
     x = df[feature_cols]
-    y = df["perfil_cluster"]
+    y = df["segmento_pos_venda"]
+    check_temporal_leakage(x, feature_cols)
 
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
@@ -120,9 +134,10 @@ def register_churn_classifier(experiment_name="ford_classificacao_churn", model_
     mlflow.set_experiment(experiment_name)
 
     df = _load_data()
-    feature_cols = PURCHASE_FEATURES_NUMERIC + PURCHASE_FEATURES_CATEGORICAL
+    feature_cols = SNAPSHOT_FEATURES_NUMERIC + SNAPSHOT_FEATURES_CATEGORICAL
     x = df[feature_cols]
-    y = df["churn"]
+    y = df[TARGET_CHURN]
+    check_temporal_leakage(x, feature_cols)
 
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
