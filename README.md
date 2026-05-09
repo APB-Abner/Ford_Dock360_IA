@@ -101,8 +101,35 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 }
 ```
 
+## Deploy no Render
+
+O projeto esta preparado para deploy como Web Service Python no Render via
+`render.yaml`.
+
+Configuracao usada:
+
+- Build Command: `pip install --upgrade pip && pip install -r requirements-api.txt`
+- Start Command: `uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
+- Health Check Path: `/`
+- Python: `3.11.11`
+
+Variaveis criadas/configuradas no Render:
+
+- `SECRET_KEY`: gerada pelo Render, obrigatoria para JWT
+- `JWT_ISSUER`: `ford-vinguard-api`
+- `JWT_AUDIENCE`: `ford-vinguard-api`
+- `MODELS_DIR`: `models`
+- `CHURN_MODEL_FILENAME`: `churn_pos_venda_rf_calibrated.joblib`
+- `PERFIL_MODEL_FILENAME`: `segmento_pos_venda_classifier_experimental.joblib`
+
+Observacao importante: `models/` e `data/` nao sao versionados. O deploy sobe a
+API e a documentacao (`/docs`), mas os endpoints `/predict` e `/predict/batch`
+dependem dos arquivos `.joblib` existirem no diretorio configurado em
+`MODELS_DIR`. Para uma demo completa no Render, envie os modelos por disco
+persistente, artefato externo baixado no build, ou outro mecanismo aprovado pelo
+professor.
+
 ## Testes
 ```bash
 pytest tests/ -v
 ```
-

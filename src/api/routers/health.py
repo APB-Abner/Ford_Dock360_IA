@@ -7,9 +7,10 @@ from src.api.config import settings
 
 router = APIRouter(tags=["health"])
 
-_MODELS_DIR = Path(__file__).resolve().parents[3] / "models"
-_REQUIRED = ["churn_rf_calibrated.joblib"]
-_OPTIONAL = ["perfil_rf_classifier.joblib"]
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_MODELS_DIR = _PROJECT_ROOT / settings.MODELS_DIR
+_REQUIRED = [settings.CHURN_MODEL_FILENAME]
+_OPTIONAL = [settings.PERFIL_MODEL_FILENAME]
 _MIN_KEY_LEN = 32
 _EXAMPLE_KEY = "changeme-local-only"
 

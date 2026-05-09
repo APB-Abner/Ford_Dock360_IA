@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,9 +11,11 @@ class Settings(BaseSettings):
     JWT_AUDIENCE: str = "ford-vinguard-api"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    # Paths (defaults relative to workspace root)
+    # Paths/names expected by the API runtime. Relative paths use the repo root.
     DATA_PATH: str = "data/raw/ford_complaints_top3_por_modelo.csv"
-    MODELS_DIR: str = str(Path(__file__).resolve().parents[2] / 'models')
+    MODELS_DIR: str = "models"
+    CHURN_MODEL_FILENAME: str = "churn_pos_venda_rf_calibrated.joblib"
+    PERFIL_MODEL_FILENAME: str = "segmento_pos_venda_classifier_experimental.joblib"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

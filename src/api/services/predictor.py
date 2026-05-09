@@ -4,6 +4,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from fastapi import HTTPException
+from src.api.config import settings
 from src.api.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
 
 try:
@@ -19,11 +20,14 @@ _ACOES = {
     "fiel": "Nenhuma acao ativa. Registrar para agradecimento apos proxima revisao.",
 }
 
-MODELS_DIR = Path(__file__).resolve().parents[3] / "models"
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+MODELS_DIR = _PROJECT_ROOT / settings.MODELS_DIR
 # Fallback checksums for models that predate sidecar files (.sha256).
 # The training pipeline writes a sidecar on each run, making this stale-proof.
 _FALLBACK_SHA256 = {
     "churn_rf_calibrated.joblib": "72b20520a269f8c7d867f034832b61c5ad1534710910ba410a8cdb457a411a14",
+    "perfil_rf_classifier.joblib": "641318a241b101d8701348e40eb6c8396b6440876f38729eafcef6860b9a3079",
+    "churn_pos_venda_rf_calibrated.joblib": "bc096497fbe0fccb5109e7a115cd7983c1feff02ea1498301e27a766467bd75b",
 }
 
 
@@ -87,7 +91,7 @@ class PredictorService:
 
     def _load_churn(self):
         if self.model_churn is None:
-            path = self._model_path("churn_rf_calibrated.joblib")
+            path = self._model_path(settings.CHURN_MODEL_FILENAME)
             if not path.exists():
                 raise HTTPException(status_code=503, detail=f"Modelo churn nao encontrado: {path}")
             _ensure_models_read_only()
@@ -98,7 +102,7 @@ class PredictorService:
 
     def _load_perfil(self):
         if self.model_perfil is None:
-            path = self._model_path("perfil_rf_classifier.joblib")
+            path = self._model_path(settings.PERFIL_MODEL_FILENAME)
             if path.exists():
                 _ensure_models_read_only()
                 _verify_checksum(path)

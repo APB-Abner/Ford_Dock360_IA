@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ford-vinguard-api
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements-api.txt
+    startCommand: uvicorn src.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_ISSUER
+        value: ford-vinguard-api
+      - key: JWT_AUDIENCE
+        value: ford-vinguard-api
+      - key: MODELS_DIR
+        value: models
+      - key: CHURN_MODEL_FILENAME
+        value: churn_pos_venda_rf_calibrated.joblib
+      - key: PERFIL_MODEL_FILENAME
+        value: segmento_pos_venda_classifier_experimental.joblib
