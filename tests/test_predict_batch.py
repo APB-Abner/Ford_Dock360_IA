@@ -11,7 +11,19 @@ from src.api.services.predictor import PredictorService
 
 
 class FakeChurnModel:
-    feature_names_in_ = ["ano_modelo", "dias_ate_entrega", "idade_veiculo_meses", "modelo"]
+    feature_names_in_ = [
+        "ano_modelo",
+        "qtde_revisoes_ate_corte",
+        "meses_desde_ultimo_servico_ate_corte",
+        "meses_relacionamento_ate_corte",
+        "n_dealers_usados_ate_corte",
+        "km_max_ate_corte",
+        "pct_agenda_ate_corte",
+        "intervalo_medio_revisoes_dias_ate_corte",
+        "dias_ate_primeira_revisao",
+        "idade_veiculo_meses_ate_corte",
+        "modelo",
+    ]
 
     def __init__(self):
         self.predict_proba_calls = 0
@@ -43,11 +55,38 @@ def test_predict_batch_retorna_lista_de_respostas_vetorizada():
     perfil_model = FakePerfilModel()
     service.model_churn = churn_model
     service.model_perfil = perfil_model
-    service.feature_names = ["ano_modelo", "dias_ate_entrega", "idade_veiculo_meses", "modelo"]
+    service.feature_names = FakeChurnModel.feature_names_in_
+
+    features_1 = {
+        "ano_modelo": 2023,
+        "qtde_revisoes_ate_corte": 1,
+        "meses_desde_ultimo_servico_ate_corte": 6.0,
+        "meses_relacionamento_ate_corte": 18.0,
+        "n_dealers_usados_ate_corte": 1,
+        "km_max_ate_corte": 23400,
+        "pct_agenda_ate_corte": 0.8,
+        "intervalo_medio_revisoes_dias_ate_corte": 190.0,
+        "dias_ate_primeira_revisao": 160,
+        "idade_veiculo_meses_ate_corte": 18.0,
+        "modelo": "RANGER",
+    }
+    features_2 = {
+        "ano_modelo": 2021,
+        "qtde_revisoes_ate_corte": 3,
+        "meses_desde_ultimo_servico_ate_corte": 16.0,
+        "meses_relacionamento_ate_corte": 42.0,
+        "n_dealers_usados_ate_corte": 2,
+        "km_max_ate_corte": 67200,
+        "pct_agenda_ate_corte": 0.55,
+        "intervalo_medio_revisoes_dias_ate_corte": 240.0,
+        "dias_ate_primeira_revisao": 190,
+        "idade_veiculo_meses_ate_corte": 42.0,
+        "modelo": "KA",
+    }
 
     items = [
-        PredictRequest(features={"ano_modelo": 2023, "dias_ate_entrega": 10, "idade_veiculo_meses": 12, "modelo": "RANGER"}, modelo_veiculo="Ranger"),
-        PredictRequest(features={"ano_modelo": 2021, "dias_ate_entrega": 5, "idade_veiculo_meses": 24, "modelo": "KA"}, modelo_veiculo="Ka"),
+        PredictRequest(features=features_1, modelo_veiculo="Ranger"),
+        PredictRequest(features=features_2, modelo_veiculo="Ka"),
     ]
 
     try:

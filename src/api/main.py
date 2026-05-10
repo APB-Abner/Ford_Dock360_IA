@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 
-from src.api.routers import health, predict
+from src.api.routers import auth, health, predict
 
 
 app = FastAPI(title="Ford VinGuard ML API")
+app.include_router(auth.router)
 app.include_router(health.router)
 app.include_router(predict.router)
 
