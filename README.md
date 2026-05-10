@@ -109,7 +109,7 @@ O projeto esta preparado para deploy como Web Service Python no Render via
 Configuracao usada:
 
 - Build Command: `pip install --upgrade pip && pip install -r requirements-api.txt`
-- Start Command: `uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
+- Start Command: `python scripts/fetch_model_artifacts.py && uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
 - Health Check Path: `/`
 - Python: `3.11.11`
 
@@ -121,13 +121,24 @@ Variaveis criadas/configuradas no Render:
 - `MODELS_DIR`: `models`
 - `CHURN_MODEL_FILENAME`: `churn_pos_venda_rf_calibrated.joblib`
 - `PERFIL_MODEL_FILENAME`: `segmento_pos_venda_classifier_experimental.joblib`
+- `CHURN_MODEL_URL`: URL privada/publica para baixar o `.joblib` de churn
+- `PERFIL_MODEL_URL`: URL privada/publica para baixar o `.joblib` de perfil
+- `CHURN_MODEL_SHA256`: checksum esperado do modelo de churn
+- `PERFIL_MODEL_SHA256`: checksum esperado do modelo de perfil
 
-Observacao importante: `models/` e `data/` nao sao versionados. O deploy sobe a
-API e a documentacao (`/docs`), mas os endpoints `/predict` e `/predict/batch`
-dependem dos arquivos `.joblib` existirem no diretorio configurado em
-`MODELS_DIR`. Para uma demo completa no Render, envie os modelos por disco
-persistente, artefato externo baixado no build, ou outro mecanismo aprovado pelo
-professor.
+Observacao importante: `models/` e `data/` nao sao versionados. Por isso, o
+deploy tem dois niveis:
+
+- Sem URLs de modelo: `/` e `/docs` sobem para demonstrar a API; `/health`
+  retorna `503 degraded` porque os artefatos ainda nao existem.
+- Com `CHURN_MODEL_URL` e `PERFIL_MODEL_URL`: o script
+  `scripts/fetch_model_artifacts.py` baixa os `.joblib` para `MODELS_DIR` antes
+  do Uvicorn iniciar. Com os checksums corretos, `/health`, `/predict` e
+  `/predict/batch` ficam prontos para demo.
+
+As URLs dos artefatos devem ser configuradas no painel do Render ou preenchidas
+no fluxo inicial do Blueprint. Nao commitar URLs assinadas, tokens ou datasets
+reais no repositorio.
 
 ## Testes
 ```bash

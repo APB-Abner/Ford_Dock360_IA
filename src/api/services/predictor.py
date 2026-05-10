@@ -28,6 +28,7 @@ _FALLBACK_SHA256 = {
     "churn_rf_calibrated.joblib": "72b20520a269f8c7d867f034832b61c5ad1534710910ba410a8cdb457a411a14",
     "perfil_rf_classifier.joblib": "641318a241b101d8701348e40eb6c8396b6440876f38729eafcef6860b9a3079",
     "churn_pos_venda_rf_calibrated.joblib": "bc096497fbe0fccb5109e7a115cd7983c1feff02ea1498301e27a766467bd75b",
+    "segmento_pos_venda_classifier_experimental.joblib": "6b6f2ef1718f03227d99fb2d7342d8cd5c221a42242e233ec6abc45c5831664f",
 }
 
 
