@@ -54,8 +54,13 @@ O Ford VinGuard identifica clientes com maior probabilidade de abandonar a rede 
 As seguintes features representam comportamento **posterior** à compra e são proibidas no treinamento dos classificadores:
 `qtde_revisoes`, `meses_desde_ultimo_servico`, `meses_relacionamento`, `n_dealers_usados`, `km_max`, `pct_agenda`, `intervalo_medio_revisoes_dias`, `dias_ate_primeira_revisao`, `primeiro_servico`, `ultimo_servico`.
 
-O modelo de produção utiliza apenas features disponíveis no momento da compra:
-`modelo`, `ano_modelo`, `dias_ate_entrega`, `idade_veiculo_meses`.
+O modelo de produção publicado usa features de snapshot calculadas somente até
+`DATA_CORTE`, sem usar colunas futuras ou target:
+`ano_modelo`, `qtde_revisoes_ate_corte`,
+`meses_desde_ultimo_servico_ate_corte`, `meses_relacionamento_ate_corte`,
+`n_dealers_usados_ate_corte`, `km_max_ate_corte`, `pct_agenda_ate_corte`,
+`intervalo_medio_revisoes_dias_ate_corte`, `dias_ate_primeira_revisao`,
+`idade_veiculo_meses_ate_corte`, `modelo`.
 
 ## Como Reproduzir o Pipeline
 
@@ -92,14 +97,43 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```json
 {
   "features": {
-    "ano_modelo": 2023,
-    "dias_ate_entrega": 11,
-    "idade_veiculo_meses": 18.5,
-    "modelo": "RANGER"
+    "ano_modelo": 2020,
+    "qtde_revisoes_ate_corte": 2,
+    "meses_desde_ultimo_servico_ate_corte": 14.2,
+    "meses_relacionamento_ate_corte": 48.0,
+    "n_dealers_usados_ate_corte": 1,
+    "km_max_ate_corte": 48200,
+    "pct_agenda_ate_corte": 0.65,
+    "intervalo_medio_revisoes_dias_ate_corte": 220.0,
+    "dias_ate_primeira_revisao": 180,
+    "idade_veiculo_meses_ate_corte": 54.0,
+    "modelo": "KA"
   },
-  "modelo_veiculo": "Ranger"
+  "modelo_veiculo": "Ka"
 }
 ```
+
+### Token de demo/servico
+
+Os endpoints `/predict` e `/predict/batch` exigem Bearer JWT com role
+`analyst` ou `admin`.
+
+Para gerar um token local usando o mesmo `SECRET_KEY` da API:
+
+```bash
+python scripts/create_demo_token.py --role analyst
+```
+
+Para gerar token no ambiente publicado, configure `DEMO_TOKEN_SECRET` no Render
+e chame:
+
+```bash
+curl -X POST "https://ford-vinguard-api.onrender.com/auth/demo-token?role=analyst" \
+  -H "X-Demo-Token-Secret: <DEMO_TOKEN_SECRET>"
+```
+
+Use o `access_token` retornado como `Authorization: Bearer <token>` na FastAPI
+ou como header `X-ML-Demo-Token` no BFF Java.
 
 ## Deploy no Render
 
@@ -108,8 +142,8 @@ O projeto esta preparado para deploy como Web Service Python no Render via
 
 Configuracao usada:
 
-- Build Command: `pip install --upgrade pip && pip install -r requirements-api.txt`
-- Start Command: `python scripts/fetch_model_artifacts.py && uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
+- Build Command: `pip install --upgrade pip && pip install -r requirements-api.txt && python scripts/fetch_model_artifacts.py`
+- Start Command: `uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
 - Health Check Path: `/`
 - Python: `3.11.11`
 
@@ -118,6 +152,8 @@ Variaveis criadas/configuradas no Render:
 - `SECRET_KEY`: gerada pelo Render, obrigatoria para JWT
 - `JWT_ISSUER`: `ford-vinguard-api`
 - `JWT_AUDIENCE`: `ford-vinguard-api`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: validade dos tokens de demo/servico
+- `DEMO_TOKEN_SECRET`: segredo opcional para habilitar `/auth/demo-token`
 - `MODELS_DIR`: `models`
 - `CHURN_MODEL_FILENAME`: `churn_pos_venda_rf_calibrated.joblib`
 - `PERFIL_MODEL_FILENAME`: `segmento_pos_venda_classifier_experimental.joblib`

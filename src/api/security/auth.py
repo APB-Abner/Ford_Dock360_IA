@@ -9,7 +9,6 @@ from src.api.config import settings
 
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
 bearer_scheme = HTTPBearer()
 ROLE_LEVELS = {
     "viewer": 1,
@@ -23,7 +22,7 @@ def _role_value(role: Any) -> str:
 
 
 def create_access_token(subject: str, role: Any) -> str:
-    expires_at = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expires_at = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": subject,
         "role": _role_value(role),

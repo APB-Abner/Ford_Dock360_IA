@@ -1,19 +1,20 @@
 import pytest
 from pydantic import ValidationError
-from src.api.models.schemas import PredictRequest, PredictResponse, ChurnLabelEnum, RiskLevelEnum
+from src.api.models.schemas import (
+    ChurnLabelEnum,
+    PREDICT_FEATURES_EXAMPLE,
+    PredictRequest,
+    PredictResponse,
+    RiskLevelEnum,
+)
 
 def test_predict_request_valid():
     data = {
-        "features": {
-            "ano_modelo": 2023,
-            "dias_ate_entrega": 11,
-            "idade_veiculo_meses": 18.5,
-            "modelo": "RANGER"
-        },
-        "modelo_veiculo": "Ranger"
+        "features": PREDICT_FEATURES_EXAMPLE,
+        "modelo_veiculo": "Ka",
     }
     req = PredictRequest(**data)
-    assert req.features["modelo"] == "RANGER"
+    assert req.features.modelo == "KA"
 
 def test_predict_request_missing_features():
     data = {"modelo_veiculo": "Ranger"}

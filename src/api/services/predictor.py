@@ -18,6 +18,10 @@ _ACOES = {
     "esquecido": "Configurar lembrete 45 dias antes do vencimento. Verificar disponibilidade de agenda.",
     "economico": "Apresentar tabela comparativa custo oficial vs externo. Oferta de pacote economico com preco fixo.",
     "fiel": "Nenhuma acao ativa. Registrar para agradecimento apos proxima revisao.",
+    "baixo_engajamento": "Priorizar contato consultivo. Explicar beneficios da rede Ford e propor revisao preventiva.",
+    "inativo": "Ativar recuperacao imediata. Oferecer agendamento prioritario e incentivo de retorno para revisao.",
+    "multidealer": "Reforcar vinculo com a concessionaria atual. Oferecer acompanhamento dedicado e previsibilidade de custo.",
+    "recorrente": "Manter relacionamento ativo. Registrar agradecimento e convite para proxima manutencao programada.",
 }
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -185,7 +189,7 @@ class PredictorService:
         if not items:
             return []
 
-        frame = self._build_batch_frame([item.features for item in items])
+        frame = self._build_batch_frame([item.features.model_dump() for item in items])
         churn_results = self._predict_churn_batch(frame)
         perfil_results = self._predict_perfil_batch(frame)
 
