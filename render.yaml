@@ -3,8 +3,8 @@ services:
     name: ford-vinguard-api
     runtime: python
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -r requirements-api.txt
-    startCommand: python scripts/fetch_model_artifacts.py && uvicorn src.api.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip && pip install -r requirements-api.txt && python scripts/fetch_model_artifacts.py
+    startCommand: uvicorn src.api.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
