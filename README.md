@@ -176,6 +176,73 @@ As URLs dos artefatos devem ser configuradas no painel do Render ou preenchidas
 no fluxo inicial do Blueprint. Nao commitar URLs assinadas, tokens ou datasets
 reais no repositorio.
 
+## Deploy no Azure Container Apps via Dockerfile
+
+Para evitar o build automatico da Azure/Oryx, o projeto tambem possui um
+`Dockerfile` explicito na raiz. A imagem roda a FastAPI na porta `8000` por
+padrao e respeita a variavel `PORT` quando a plataforma definir outro valor.
+
+Fluxo do container:
+
+```text
+pip install -r requirements-api.txt
+python scripts/fetch_model_artifacts.py
+uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+Arquivos e pastas pesadas ou sensiveis ficam fora do contexto Docker via
+`.dockerignore`, incluindo `.env`, `data/`, `models/`, `notebooks/`,
+`reports/`, `tests/`, `__pycache__` e `.git`.
+
+Variaveis obrigatorias/recomendadas no Azure Container Apps:
+
+```env
+PORT=8000
+SECRET_KEY=<chave-com-pelo-menos-32-caracteres>
+DEMO_TOKEN_SECRET=<segredo-para-gerar-token-demo>
+MODELS_DIR=models
+CHURN_MODEL_FILENAME=churn_pos_venda_rf_calibrated.joblib
+PERFIL_MODEL_FILENAME=segmento_pos_venda_classifier_experimental.joblib
+CHURN_MODEL_URL=<url-do-artefato-churn>
+PERFIL_MODEL_URL=<url-do-artefato-perfil>
+CHURN_MODEL_SHA256=<sha256-do-artefato-churn>
+PERFIL_MODEL_SHA256=<sha256-do-artefato-perfil>
+JWT_ISSUER=ford-vinguard-api
+JWT_AUDIENCE=ford-vinguard-api
+```
+
+Exemplo de build local:
+
+```bash
+docker build -t ford-vinguard-ml-api .
+```
+
+Exemplo de execucao local sem gravar segredos no repositorio:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e PORT=8000 \
+  -e SECRET_KEY="troque-por-uma-chave-com-32-caracteres" \
+  -e DEMO_TOKEN_SECRET="troque-por-um-segredo-de-demo" \
+  -e MODELS_DIR=models \
+  -e CHURN_MODEL_FILENAME=churn_pos_venda_rf_calibrated.joblib \
+  -e PERFIL_MODEL_FILENAME=segmento_pos_venda_classifier_experimental.joblib \
+  -e CHURN_MODEL_URL="<url-do-artefato-churn>" \
+  -e PERFIL_MODEL_URL="<url-do-artefato-perfil>" \
+  -e CHURN_MODEL_SHA256="<sha256-do-artefato-churn>" \
+  -e PERFIL_MODEL_SHA256="<sha256-do-artefato-perfil>" \
+  -e JWT_ISSUER=ford-vinguard-api \
+  -e JWT_AUDIENCE=ford-vinguard-api \
+  ford-vinguard-ml-api
+```
+
+No Azure Container Apps, configure ingress HTTP externo para a porta alvo
+`8000`. O endpoint `/` valida liveness, `/health` valida a disponibilidade dos
+modelos e `/docs` abre o Swagger.
+
+Nao commitar `.env`, datasets reais, arquivos em `data/raw`,
+`data/processed`, `models/*.joblib`, URLs assinadas ou segredos usados no Azure.
+
 ## Testes
 ```bash
 pytest tests/ -v
