@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # Paths/names expected by the API runtime. Relative paths use the repo root.
     MODELS_DIR: str = "models"
     CHURN_MODEL_FILENAME: str = "churn_pos_venda_rf_calibrated.joblib"
-    PERFIL_MODEL_FILENAME: str = "segmento_pos_venda_classifier_experimental.joblib"
+    PERFIL_MODEL_FILENAME: str = "kmeans_segmentador_pos_venda.joblib"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

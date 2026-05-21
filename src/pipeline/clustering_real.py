@@ -9,6 +9,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from src.pipeline.config import CLUSTER_FEATURES_POS_VENDA, N_CLUSTERS, RANDOM_S
 INPUT_PATH = "data/processed/snapshots_pos_venda.csv"
 OUTPUT_LABELS = "data/processed/segmentos_pos_venda.csv"
 MODEL_PATH = "models/kmeans_segmentador_pos_venda.joblib"
+SEGMENT_MAP_PATH = "models/cluster_segment_map.json"
 ELBOW_PATH = "reports/elbow_silhouette_pos_venda.png"
 PCA_PATH = "reports/clusters_pca_pos_venda.png"
 CLUSTER_FEATURES = CLUSTER_FEATURES_POS_VENDA
@@ -202,6 +204,11 @@ def run_clustering(input_path=INPUT_PATH, n_clusters=N_CLUSTERS):
         hashlib.sha256(Path(MODEL_PATH).read_bytes()).hexdigest()
     )
     print(f"Salvo: {MODEL_PATH}")
+
+    segment_map = {str(k): v for k, v in mapping.items()}
+    with open(SEGMENT_MAP_PATH, "w") as f:
+        json.dump(segment_map, f, indent=2)
+    print(f"Mapeamento salvo: {SEGMENT_MAP_PATH}")
 
     print("\n=== Distribuicao final ===")
     print(df_labels["segmento_pos_venda"].value_counts(normalize=True).round(3))

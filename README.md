@@ -38,7 +38,6 @@ O Ford VinGuard identifica clientes com maior probabilidade de abandonar a rede 
 
 - `src/pipeline/feature_engineering_real.py`: Agrega 600k+ OS em 175k+ VINs únicos.
 - `src/pipeline/clustering_real.py`: Executa K-Means em features comportamentais.
-- `src/pipeline/train_classifier_real.py`: Treina o classificador de perfil de cliente.
 - `src/pipeline/train_churn_real.py`: Treina o modelo calibrado de churn.
 - `src/pipeline/mlflow_tracking.py`: Registra experimentos no MLflow.
 - `src/pipeline/config.py`: Centraliza constantes e lista de anti-leakage.
@@ -86,7 +85,6 @@ Gera `data/processed/segmentos_pos_venda.csv`.
 ### 3. Treinamento
 ```bash
 python -m src.pipeline.train_churn_real
-python -m src.pipeline.train_classifier_real
 ```
 Gera os arquivos `.joblib` em `models/`.
 
@@ -96,14 +94,13 @@ python -m src.pipeline.mlflow_tracking
 mlflow ui --backend-store-uri ./mlruns
 ```
 Registra os artefatos ja gerados dos experimentos de churn, segmentacao
-K-Means e classificador experimental de segmento. Esse passo e evidencia de
-experimentacao; nao e necessario para a API em runtime.
+K-Means. Esse passo e evidencia de experimentacao; nao e necessario para a API
+em runtime.
 
 ## Notas de Entrega
 
-- `src/pipeline/complaints_loader.py`, `src/pipeline/visualizations.py` e
-  `reports/cybersecurity.md` foram removidos do escopo atual.
-- O tracking MLflow e apenas evidencia experimental; a API nao depende dele em
+- Arquivos de experimentos antigos foram removidos do escopo atual.
+- O tracking MLflow e apenas evidencia de avaliacao; a API nao depende dele em
   runtime.
 - Os notebooks de EDA geram graficos de apoio em `reports/`, mas nao sao passos
   obrigatorios do pipeline produtivo.
@@ -180,11 +177,11 @@ Variaveis criadas/configuradas no Render:
 - `DEMO_TOKEN_SECRET`: segredo opcional para habilitar `/auth/demo-token`
 - `MODELS_DIR`: `models`
 - `CHURN_MODEL_FILENAME`: `churn_pos_venda_rf_calibrated.joblib`
-- `PERFIL_MODEL_FILENAME`: `segmento_pos_venda_classifier_experimental.joblib`
+- `PERFIL_MODEL_FILENAME`: `kmeans_segmentador_pos_venda.joblib`
 - `CHURN_MODEL_URL`: URL privada/publica para baixar o `.joblib` de churn
 - `PERFIL_MODEL_URL`: URL privada/publica para baixar o `.joblib` de perfil
 - `CHURN_MODEL_SHA256`: checksum esperado do modelo de churn
-- `PERFIL_MODEL_SHA256`: checksum esperado do modelo de perfil
+- `PERFIL_MODEL_SHA256`: checksum esperado do segmentador K-Means
 
 Observacao importante: `models/` e `data/` nao sao versionados. Por isso, o
 deploy tem dois niveis:
@@ -226,7 +223,7 @@ SECRET_KEY=<chave-com-pelo-menos-32-caracteres>
 DEMO_TOKEN_SECRET=<segredo-para-gerar-token-demo>
 MODELS_DIR=models
 CHURN_MODEL_FILENAME=churn_pos_venda_rf_calibrated.joblib
-PERFIL_MODEL_FILENAME=segmento_pos_venda_classifier_experimental.joblib
+PERFIL_MODEL_FILENAME=kmeans_segmentador_pos_venda.joblib
 CHURN_MODEL_URL=<url-do-artefato-churn>
 PERFIL_MODEL_URL=<url-do-artefato-perfil>
 CHURN_MODEL_SHA256=<sha256-do-artefato-churn>
@@ -250,7 +247,7 @@ docker run --rm -p 8000:8000 \
   -e DEMO_TOKEN_SECRET="troque-por-um-segredo-de-demo" \
   -e MODELS_DIR=models \
   -e CHURN_MODEL_FILENAME=churn_pos_venda_rf_calibrated.joblib \
-  -e PERFIL_MODEL_FILENAME=segmento_pos_venda_classifier_experimental.joblib \
+  -e PERFIL_MODEL_FILENAME=kmeans_segmentador_pos_venda.joblib \
   -e CHURN_MODEL_URL="<url-do-artefato-churn>" \
   -e PERFIL_MODEL_URL="<url-do-artefato-perfil>" \
   -e CHURN_MODEL_SHA256="<sha256-do-artefato-churn>" \

@@ -18,7 +18,7 @@
 - Todo pre-processamento DENTRO de sklearn.Pipeline
 - random_state=42 obrigatorio em tudo que aceita
 - stratify=y no train_test_split de classificacao
-- F1 Macro (segmento experimental) ou AUC-ROC (churn) como metrica principal — nunca accuracy isolada
+- AUC-ROC como metrica principal para churn — nunca accuracy isolada
 - class_weight='balanced' obrigatorio em classificadores
 
 ## Dataset (Caminho B — dados reais Ford)
@@ -66,14 +66,10 @@ Features comportamentais permitidas quando calculadas ate a data de corte:
 2. python -m src.pipeline.clustering_real           # segmentacao pos-venda
 3. python -m src.pipeline.train_churn_real          # risco de abandono pos-venda
 
-Opcional/experimental:
-4. python -m src.pipeline.train_classifier_real
-
 ## Estrutura
 
 - src/pipeline/feature_engineering_real.py : snapshot pos-venda por VIN
 - src/pipeline/clustering_real.py          : K-Means + segmentos pos-venda neutros
-- src/pipeline/train_classifier_real.py    : experimento secundario de segmento
 - src/pipeline/train_churn_real.py         : RF calibrado para abandono pos-venda
 - data/raw/vin_share_Desafio_02.xlsx       : dataset real Ford
 - data/processed/snapshots_pos_venda.csv    : 1 linha por VIN com features ate corte

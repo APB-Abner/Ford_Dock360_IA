@@ -143,6 +143,30 @@ def build_snapshot(df, data_corte, janela_churn_meses=JANELA_CHURN_MESES):
     snapshot["qtd_servicos_pos_corte"] = snapshot["qtd_servicos_pos_corte"].fillna(0).astype(int)
     snapshot["voltou_pos_corte"] = snapshot["qtd_servicos_pos_corte"] > 0
     snapshot[TARGET_CHURN] = (~snapshot["voltou_pos_corte"]).astype(int)
+
+    # Saneamento: remover VINs com datas inconsistentes
+    n_antes = len(snapshot)
+
+    # VINs com sales_date posterior ao DATA_CORTE (impossível ter histórico válido)
+    mask_sales = snapshot["sales_date"].notna() & (snapshot["sales_date"] > data_corte)
+    snapshot = snapshot[~mask_sales].copy()
+
+    # VINs com primeira revisão antes da data de venda (erro de data): setar NaN na feature
+    mask_revisao = snapshot["dias_ate_primeira_revisao"] < 0
+    snapshot.loc[mask_revisao, "dias_ate_primeira_revisao"] = pd.NA
+
+    # VINs com idade negativa (sales_date > DATA_CORTE que escaparam)
+    mask_idade = snapshot["idade_veiculo_meses_ate_corte"] < 0
+    snapshot = snapshot[~mask_idade].copy()
+
+    # dias_ate_entrega negativo: não é feature do modelo, setar NaN
+    if "dias_ate_entrega" in snapshot.columns:
+        snapshot.loc[snapshot["dias_ate_entrega"] < 0, "dias_ate_entrega"] = pd.NA
+
+    n_removidos = n_antes - len(snapshot)
+    print(f"Saneamento: {n_removidos} VINs removidos ({n_removidos/n_antes*100:.2f}%)")
+    print(f"VINs após saneamento: {len(snapshot):,}")
+
     snapshot["data_corte"] = data_corte
     snapshot["fim_janela_churn"] = fim_janela
     snapshot["data_max_observada"] = data_max

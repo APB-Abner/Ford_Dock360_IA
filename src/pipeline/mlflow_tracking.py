@@ -4,10 +4,8 @@ import mlflow
 import mlflow.sklearn
 import pandas as pd
 from mlflow.tracking import MlflowClient
-from sklearn.metrics import f1_score, roc_auc_score, silhouette_score
+from sklearn.metrics import roc_auc_score, silhouette_score
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
@@ -21,13 +19,10 @@ from src.pipeline.config import (
     TEST_SIZE,
 )
 from src.pipeline.clustering_real import _make_pipeline
-from src.pipeline.train_classifier_real import EXPERIMENT_FEATURES_CATEGORICAL, EXPERIMENT_FEATURES_NUMERIC
-from src.pipeline.train_classifier_real import _build_preprocessor as build_preprocessor_perfil
 from src.pipeline.train_churn_real import _build_preprocessor as build_preprocessor_churn
 from src.pipeline.train_churn_real import check_temporal_leakage
 
 VINS_PATH = "data/processed/dataset_churn_pos_venda.csv"
-SEGMENTOS_PATH = "data/processed/segmentos_pos_venda.csv"
 TRACKING_URI = "file:./mlruns"
 
 
@@ -77,58 +72,6 @@ def register_kmeans_experiment(experiment_name="ford_segmentacao_kmeans"):
     return pd.DataFrame(candidate_rows)
 
 
-def register_perfil_classifier(
-    experiment_name="ford_segmento_classifier_experimental",
-    model_name="ford_segmento_classifier_experimental",
-):
-    client = setup_mlflow()
-    mlflow.set_experiment(experiment_name)
-
-    df = _load_data().merge(pd.read_csv(SEGMENTOS_PATH), on="VIN_Hash", how="inner")
-    if "segmento_pos_venda" not in df.columns:
-        raise ValueError("Rode o clustering antes para gerar segmento_pos_venda")
-
-    feature_cols = EXPERIMENT_FEATURES_NUMERIC + EXPERIMENT_FEATURES_CATEGORICAL
-    x = df[feature_cols]
-    y = df["segmento_pos_venda"]
-    check_temporal_leakage(x, feature_cols)
-
-    x_train, x_test, y_train, y_test = train_test_split(
-        x, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
-    )
-
-    models = {
-        "LogReg": LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE),
-        "DecisionTree": DecisionTreeClassifier(max_depth=4, class_weight="balanced", random_state=RANDOM_STATE),
-        "RandomForest": RandomForestClassifier(n_estimators=50, max_depth=8, class_weight="balanced", random_state=RANDOM_STATE, n_jobs=-1),
-    }
-
-    preprocessor = build_preprocessor_perfil()
-    best_f1 = -1
-    best_run = None
-
-    for name, estimator in models.items():
-        pipeline = Pipeline([("preprocessor", preprocessor), ("model", estimator)])
-        pipeline.fit(x_train, y_train)
-        y_pred = pipeline.predict(x_test)
-        f1 = f1_score(y_test, y_pred, average="macro")
-
-        with mlflow.start_run(run_name=name) as run:
-            mlflow.log_param("model", name)
-            mlflow.log_metric("f1_macro", f1)
-            if f1 > best_f1:
-                best_f1 = f1
-                best_run = run
-                mlflow.sklearn.log_model(pipeline, "model")
-
-    if best_run:
-        model_uri = f"runs:/{best_run.info.run_id}/model"
-        mv = mlflow.register_model(model_uri, model_name)
-        client.transition_model_version_stage(model_name, mv.version, "Production", archive_existing_versions=True)
-
-    return best_f1
-
-
 def register_churn_classifier(experiment_name="ford_classificacao_churn", model_name="ford_churn_classifier"):
     client = setup_mlflow()
     mlflow.set_experiment(experiment_name)
@@ -165,5 +108,4 @@ def register_churn_classifier(experiment_name="ford_classificacao_churn", model_
 
 if __name__ == "__main__":
     register_kmeans_experiment()
-    register_perfil_classifier()
     register_churn_classifier()

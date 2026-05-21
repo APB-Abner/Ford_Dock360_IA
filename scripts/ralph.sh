@@ -297,7 +297,7 @@ $([ -n "$fix" ] && printf "\n## Known Fix\n%s" "$fix")
 5. If a Known Fix is provided, apply it exactly
 6. After implementing, verify py_compile checks listed in acceptance criteria pass
 7. Do NOT commit changes. Only implement and verify the code.
-8. All API file paths are under src/api/ (not ford-ml-api/)
+8. All API file paths are under src/api/
 9. All pipeline paths are under src/pipeline/
 PROMPT
 }

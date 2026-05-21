@@ -24,11 +24,11 @@ services:
       - key: CHURN_MODEL_FILENAME
         value: churn_pos_venda_rf_calibrated.joblib
       - key: PERFIL_MODEL_FILENAME
-        value: segmento_pos_venda_classifier_experimental.joblib
+        value: kmeans_segmentador_pos_venda.joblib
       - key: CHURN_MODEL_SHA256
-        value: bc096497fbe0fccb5109e7a115cd7983c1feff02ea1498301e27a766467bd75b
+        value: 0cdb70f14e3f4a3b43d3365cbe055d7ec034aadaac63457e78ac6e1a92d4af08
       - key: PERFIL_MODEL_SHA256
-        value: 6b6f2ef1718f03227d99fb2d7342d8cd5c221a42242e233ec6abc45c5831664f
+        value: e797fe62fdf4d0e7854705cee486d6942a250be62e3eeefb789c782abda0bf6c
       - key: CHURN_MODEL_URL
         sync: false
       - key: PERFIL_MODEL_URL

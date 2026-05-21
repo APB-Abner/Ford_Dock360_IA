@@ -21,7 +21,7 @@ def _model_specs():
         },
         {
             "label": "perfil",
-            "filename": os.getenv("PERFIL_MODEL_FILENAME", "segmento_pos_venda_classifier_experimental.joblib"),
+            "filename": os.getenv("PERFIL_MODEL_FILENAME", "kmeans_segmentador_pos_venda.joblib"),
             "url": os.getenv("PERFIL_MODEL_URL", ""),
             "sha256": os.getenv("PERFIL_MODEL_SHA256", ""),
         },

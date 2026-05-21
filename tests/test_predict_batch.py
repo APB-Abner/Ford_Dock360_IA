@@ -34,28 +34,32 @@ class FakeChurnModel:
         return np.array([[0.8, 0.2], [0.25, 0.75]])
 
 
-class FakePerfilModel:
-    classes_ = np.array(["recorrente", "inativo"])
+class FakeKMeansModel:
+    """Simula K-Means: retorna cluster IDs via predict()."""
 
     def __init__(self):
-        self.predict_proba_calls = 0
+        self.predict_calls = 0
 
-    def predict_proba(self, frame):
-        self.predict_proba_calls += 1
+    def predict(self, frame):
+        self.predict_calls += 1
         assert len(frame) == 2
-        return np.array([[0.9, 0.1], [0.2, 0.8]])
+        # cluster 0 → recorrente, cluster 1 → inativo (via _segment_map do service)
+        return np.array([0, 1])
 
 
 def test_predict_batch_retorna_lista_de_respostas_vetorizada():
     service = PredictorService()
     original_model_churn = service.model_churn
-    original_model_perfil = service.model_perfil
+    original_model_kmeans = service.model_kmeans
+    original_segment_map = service._segment_map
     original_feature_names = service.feature_names
     original_perfil_loaded = service._perfil_loaded
+
     churn_model = FakeChurnModel()
-    perfil_model = FakePerfilModel()
+    kmeans_model = FakeKMeansModel()
     service.model_churn = churn_model
-    service.model_perfil = perfil_model
+    service.model_kmeans = kmeans_model
+    service._segment_map = {"0": "recorrente", "1": "inativo"}
     service._perfil_loaded = True
     service.feature_names = FakeChurnModel.feature_names_in_
 
@@ -95,7 +99,7 @@ def test_predict_batch_retorna_lista_de_respostas_vetorizada():
         responses = service.predict_batch(items)
 
         assert churn_model.predict_proba_calls == 1
-        assert perfil_model.predict_proba_calls == 1
+        assert kmeans_model.predict_calls == 1
         assert isinstance(responses, list)
         assert len(responses) == 2
         assert all(isinstance(response, PredictResponse) for response in responses)
@@ -103,10 +107,13 @@ def test_predict_batch_retorna_lista_de_respostas_vetorizada():
         assert responses[1].prediction == "churn"
         assert responses[0].perfil_previsto == "recorrente"
         assert responses[1].perfil_previsto == "inativo"
+        assert responses[0].probabilidades_perfil is None
+        assert responses[1].probabilidades_perfil is None
         assert responses[0].acao_recomendada is not None
         assert responses[1].acao_recomendada is not None
     finally:
         service.model_churn = original_model_churn
-        service.model_perfil = original_model_perfil
+        service.model_kmeans = original_model_kmeans
+        service._segment_map = original_segment_map
         service.feature_names = original_feature_names
         service._perfil_loaded = original_perfil_loaded

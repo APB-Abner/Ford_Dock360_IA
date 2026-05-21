@@ -1,14 +1,28 @@
 import hashlib
 import hmac
+import json
 import logging
 from pathlib import Path
+
 import joblib
+import numpy as np
 import pandas as pd
 from fastapi import HTTPException
+
 from src.api.config import settings
 from src.api.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
 
 _logger = logging.getLogger(__name__)
+
+CLUSTER_FEATURES = [
+    "qtde_revisoes_ate_corte",
+    "meses_desde_ultimo_servico_ate_corte",
+    "meses_relacionamento_ate_corte",
+    "n_dealers_usados_ate_corte",
+    "km_max_ate_corte",
+    "pct_agenda_ate_corte",
+    "intervalo_medio_revisoes_dias_ate_corte",
+]
 
 _ACOES = {
     "baixo_engajamento": "Priorizar contato de retencao. Reforcar beneficios da rede autorizada e revisar vencimentos proximos.",
@@ -23,7 +37,6 @@ MODELS_DIR = _PROJECT_ROOT / settings.MODELS_DIR
 # The training pipeline writes a sidecar on each run, making this stale-proof.
 _FALLBACK_SHA256 = {
     "churn_pos_venda_rf_calibrated.joblib": "c79d5e31e61e1e96718448b6179a0c3fab6b34ec3ca98f25cddd2d743a0fdb5f",
-    "segmento_pos_venda_classifier_experimental.joblib": "37738085ee2bb9edc03088ae0b65ea89265eb4a8a060c8b40ec73042eba97b9d",
 }
 
 
@@ -78,7 +91,8 @@ class PredictorService:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.model_churn = None
-            cls._instance.model_perfil = None
+            cls._instance.model_kmeans = None
+            cls._instance._segment_map = {}
             cls._instance.feature_names = None
             cls._instance._perfil_loaded = False
         return cls._instance
@@ -100,16 +114,24 @@ class PredictorService:
     def _load_perfil(self):
         if not self._perfil_loaded:
             path = self._model_path(settings.PERFIL_MODEL_FILENAME)
+            map_path = path.with_name("cluster_segment_map.json")
             if path.exists():
                 _ensure_models_read_only()
                 _verify_checksum(path)
-                self.model_perfil = joblib.load(path)
+                self.model_kmeans = joblib.load(path)
+                if map_path.exists():
+                    self._segment_map = json.loads(map_path.read_text())
+                else:
+                    _logger.warning(
+                        "cluster_segment_map.json nao encontrado em %s — segmentos serao indices numericos",
+                        map_path,
+                    )
             else:
                 _logger.warning(
-                    "Modelo de perfil nao encontrado em %s — predicao de perfil desativada", path
+                    "Modelo K-Means nao encontrado em %s — predicao de perfil desativada", path
                 )
             self._perfil_loaded = True
-        return self.model_perfil
+        return self.model_kmeans
 
     def _build_frame(self, features):
         return self._build_batch_frame([features])
@@ -151,27 +173,27 @@ class PredictorService:
         if model is None:
             return [(None, None) for _ in range(len(frame))]
         try:
-            probs_batch = model.predict_proba(frame)
-            classes = model.classes_
-            results = []
-            for probs in probs_batch:
-                perfil = str(classes[probs.argmax()])
-                results.append((perfil, {str(c): round(float(p), 4) for c, p in zip(classes, probs)}))
-            return results
-        except (ValueError, AttributeError, KeyError) as exc:
-            _alert(f'erro ao predizer perfil: {exc}')
-            raise HTTPException(status_code=503, detail=f'Modelo de perfil falhou: {exc}') from exc
+            x = pd.DataFrame([
+                {c: row.get(c, np.nan) if isinstance(row, dict) else getattr(row, c, np.nan)
+                 for c in CLUSTER_FEATURES}
+                for row in (frame.to_dict("records") if isinstance(frame, pd.DataFrame) else frame)
+            ])
+            cluster_ids = model.predict(x)
+            return [(self._segment_map.get(str(cid)), None) for cid in cluster_ids]
+        except Exception as exc:
+            _logger.warning("predict_perfil falhou: %s", exc)
+            return [(None, None) for _ in range(len(frame))]
 
     def predict(self, features):
         frame = self._build_frame(features)
         label, prob_churn, risk = self._predict_churn(frame)
-        perfil, prob_perfil = self._predict_perfil(frame)
+        perfil, _ = self._predict_perfil(frame)
         return PredictResponse(
             prediction=label,
             churn_probability=prob_churn,
             risk_level=risk,
             perfil_previsto=perfil,
-            probabilidades_perfil=prob_perfil,
+            probabilidades_perfil=None,
             acao_recomendada=_ACOES.get(perfil) if perfil else None,
         )
 
@@ -186,13 +208,13 @@ class PredictorService:
         responses = []
         for item, churn, perfil_result in zip(items, churn_results, perfil_results):
             label, prob_churn, risk = churn
-            perfil, prob_perfil = perfil_result
+            perfil, _ = perfil_result
             responses.append(PredictResponse(
                 prediction=label,
                 churn_probability=prob_churn,
                 risk_level=risk,
                 perfil_previsto=perfil,
-                probabilidades_perfil=prob_perfil,
+                probabilidades_perfil=None,
                 acao_recomendada=_ACOES.get(perfil) if perfil else None,
             ))
         return responses
