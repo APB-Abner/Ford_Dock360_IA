@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -51,13 +50,11 @@ class PredictFeatures(BaseModel):
 
 class PredictRequest(BaseModel):
     features: PredictFeatures
-    modelo_veiculo: Optional[str] = None
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "features": PREDICT_FEATURES_EXAMPLE,
-                "modelo_veiculo": "Ka",
             }
         }
     }
@@ -67,10 +64,9 @@ class PredictResponse(BaseModel):
     prediction: ChurnLabelEnum
     churn_probability: float
     risk_level: RiskLevelEnum
-    perfil_previsto: Optional[str] = None
-    probabilidades_perfil: Optional[dict] = None
-    acao_recomendada: Optional[str] = None
-    historico_problemas: Optional[list] = None
+    perfil_previsto: str | None = None
+    probabilidades_perfil: dict | None = None
+    acao_recomendada: str | None = None
 
 
 class BatchPredictRequest(BaseModel):
@@ -82,7 +78,6 @@ class BatchPredictRequest(BaseModel):
                 "items": [
                     {
                         "features": PREDICT_FEATURES_EXAMPLE,
-                        "modelo_veiculo": "Ka",
                     },
                     {
                         "features": {
@@ -95,7 +90,6 @@ class BatchPredictRequest(BaseModel):
                             "idade_veiculo_meses_ate_corte": 18.0,
                             "modelo": "RANGER",
                         },
-                        "modelo_veiculo": "Ranger",
                     },
                 ]
             }

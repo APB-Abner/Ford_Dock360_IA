@@ -19,7 +19,9 @@ Saidas:
   reports/confusion_matrix_segmento_experimental.png
 """
 
+import hashlib
 import os
+from pathlib import Path
 
 import joblib
 import matplotlib
@@ -169,6 +171,9 @@ def train_all_models():
     # Salvar Random Forest experimental. F1 baixo nao bloqueia o projeto principal.
     rf_pipeline = pipelines["RandomForest"]
     joblib.dump(rf_pipeline, MODEL_PATH, compress=3)
+    Path(MODEL_PATH).with_suffix(".sha256").write_text(
+        hashlib.sha256(Path(MODEL_PATH).read_bytes()).hexdigest()
+    )
     print(f"\nSalvo: {MODEL_PATH}")
 
     # Visualizacoes

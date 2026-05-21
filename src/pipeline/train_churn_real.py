@@ -5,7 +5,9 @@ Treina churn_futuro_18m usando features comportamentais calculadas somente
 ate DATA_CORTE. O target vem exclusivamente de eventos posteriores a DATA_CORTE.
 """
 
+import hashlib
 import os
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -200,6 +202,9 @@ def train_churn_model():
 
     # Salvar modelo
     joblib.dump(model, MODEL_PATH, compress=3)
+    Path(MODEL_PATH).with_suffix(".sha256").write_text(
+        hashlib.sha256(Path(MODEL_PATH).read_bytes()).hexdigest()
+    )
     print(f"Salvo: {MODEL_PATH}")
 
     return model, auc

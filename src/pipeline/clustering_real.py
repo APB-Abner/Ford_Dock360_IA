@@ -8,7 +8,9 @@ segmentos sao neutros e devem ser validados com negocio antes de uso comercial.
 import matplotlib
 matplotlib.use("Agg")
 
+import hashlib
 import os
+from pathlib import Path
 
 import joblib
 import matplotlib.pyplot as plt
@@ -196,6 +198,9 @@ def run_clustering(input_path=INPUT_PATH, n_clusters=N_CLUSTERS):
     df_labels.to_csv(OUTPUT_LABELS, index=False)
     print(f"\nSalvo: {OUTPUT_LABELS}")
     joblib.dump(pipeline, MODEL_PATH, compress=3)
+    Path(MODEL_PATH).with_suffix(".sha256").write_text(
+        hashlib.sha256(Path(MODEL_PATH).read_bytes()).hexdigest()
+    )
     print(f"Salvo: {MODEL_PATH}")
 
     print("\n=== Distribuicao final ===")

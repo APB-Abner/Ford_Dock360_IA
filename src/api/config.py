@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     DEMO_TOKEN_SUBJECT: str = "demo-consultor"
 
     # Paths/names expected by the API runtime. Relative paths use the repo root.
-    DATA_PATH: str = "data/raw/ford_complaints_top3_por_modelo.csv"
     MODELS_DIR: str = "models"
     CHURN_MODEL_FILENAME: str = "churn_pos_venda_rf_calibrated.joblib"
     PERFIL_MODEL_FILENAME: str = "segmento_pos_venda_classifier_experimental.joblib"

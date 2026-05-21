@@ -49,18 +49,22 @@ O Ford VinGuard identifica clientes com maior probabilidade de abandonar a rede 
 - `src/api/services/predictor.py`: Lógica de inferência.
 - `src/api/models/schemas.py`: Contratos Pydantic com exemplos reais.
 
-## Regra Crítica: Data Leakage
+## Regra Critica: Data Leakage
 
-As seguintes features representam comportamento **posterior** à compra e são proibidas no treinamento dos classificadores:
-`qtde_revisoes`, `meses_desde_ultimo_servico`, `meses_relacionamento`, `n_dealers_usados`, `km_max`, `pct_agenda`, `intervalo_medio_revisoes_dias`, `dias_ate_primeira_revisao`, `primeiro_servico`, `ultimo_servico`.
+O projeto e de pos-venda. As features de entrada sao calculadas somente ate a
+data de corte (`DATA_CORTE`) e o target de churn usa apenas eventos futuros.
 
-O modelo de produção publicado usa features de snapshot calculadas somente até
-`DATA_CORTE`, sem usar colunas futuras ou target:
+Nunca use no X informacoes pos-corte, futuro ou target, como
+`churn_futuro_18m`, `voltou_pos_corte`, `primeiro_servico_pos_corte`,
+`ultimo_servico_pos_corte` ou `qtd_servicos_pos_corte`.
+
+O modelo de churn de producao espera as features comportamentais ate corte:
 `ano_modelo`, `qtde_revisoes_ate_corte`,
-`meses_desde_ultimo_servico_ate_corte`, `meses_relacionamento_ate_corte`,
-`n_dealers_usados_ate_corte`, `km_max_ate_corte`, `pct_agenda_ate_corte`,
-`intervalo_medio_revisoes_dias_ate_corte`, `dias_ate_primeira_revisao`,
-`idade_veiculo_meses_ate_corte`, `modelo`.
+`meses_desde_ultimo_servico_ate_corte`,
+`meses_relacionamento_ate_corte`, `n_dealers_usados_ate_corte`,
+`km_max_ate_corte`, `pct_agenda_ate_corte`,
+`intervalo_medio_revisoes_dias_ate_corte`,
+`dias_ate_primeira_revisao`, `idade_veiculo_meses_ate_corte` e `modelo`.
 
 ## Como Reproduzir o Pipeline
 
@@ -70,13 +74,14 @@ Execute os scripts na ordem abaixo a partir da raiz:
 ```bash
 python -m src.pipeline.feature_engineering_real
 ```
-Gera `data/processed/vins_agregados.csv`.
+Gera `data/processed/snapshots_pos_venda.csv` e
+`data/processed/dataset_churn_pos_venda.csv`.
 
 ### 2. Segmentação (Clustering)
 ```bash
 python -m src.pipeline.clustering_real
 ```
-Gera `data/processed/cluster_labels.csv`.
+Gera `data/processed/segmentos_pos_venda.csv`.
 
 ### 3. Treinamento
 ```bash
@@ -84,6 +89,15 @@ python -m src.pipeline.train_churn_real
 python -m src.pipeline.train_classifier_real
 ```
 Gera os arquivos `.joblib` em `models/`.
+
+### 4. Tracking MLflow Opcional
+```bash
+python -m src.pipeline.mlflow_tracking
+mlflow ui --backend-store-uri ./mlruns
+```
+Registra os artefatos ja gerados dos experimentos de churn, segmentacao
+K-Means e classificador experimental de segmento. Esse passo e evidencia de
+experimentacao; nao e necessario para a API em runtime.
 
 ## API FastAPI
 
@@ -108,8 +122,7 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000
     "dias_ate_primeira_revisao": 180,
     "idade_veiculo_meses_ate_corte": 54.0,
     "modelo": "KA"
-  },
-  "modelo_veiculo": "Ka"
+  }
 }
 ```
 

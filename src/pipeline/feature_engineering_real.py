@@ -148,8 +148,6 @@ def build_snapshot(df, data_corte, janela_churn_meses=JANELA_CHURN_MESES):
     snapshot["data_max_observada"] = data_max
     snapshot["janela_futura_observavel"] = janela_observavel
 
-    # Alias temporario para notebooks antigos; nao usar em novos treinos.
-    snapshot["churn"] = snapshot[TARGET_CHURN]
     return snapshot
 
 

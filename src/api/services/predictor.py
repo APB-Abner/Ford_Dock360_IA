@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import logging
 from pathlib import Path
 import joblib
 import pandas as pd
@@ -7,21 +8,13 @@ from fastapi import HTTPException
 from src.api.config import settings
 from src.api.models.schemas import ChurnLabelEnum, PredictResponse, RiskLevelEnum
 
-try:
-    from src.pipeline.complaints_loader import get_top3_por_modelo
-    _COMPLAINTS_OK = True
-except ImportError:
-    _COMPLAINTS_OK = False
+_logger = logging.getLogger(__name__)
 
 _ACOES = {
-    "abandono": "Ativar Pulse Loop imediato. Oferecer plano de manutencao com desconto antes da primeira revisao.",
-    "esquecido": "Configurar lembrete 45 dias antes do vencimento. Verificar disponibilidade de agenda.",
-    "economico": "Apresentar tabela comparativa custo oficial vs externo. Oferta de pacote economico com preco fixo.",
-    "fiel": "Nenhuma acao ativa. Registrar para agradecimento apos proxima revisao.",
-    "baixo_engajamento": "Priorizar contato consultivo. Explicar beneficios da rede Ford e propor revisao preventiva.",
-    "inativo": "Ativar recuperacao imediata. Oferecer agendamento prioritario e incentivo de retorno para revisao.",
-    "multidealer": "Reforcar vinculo com a concessionaria atual. Oferecer acompanhamento dedicado e previsibilidade de custo.",
-    "recorrente": "Manter relacionamento ativo. Registrar agradecimento e convite para proxima manutencao programada.",
+    "baixo_engajamento": "Priorizar contato de retencao. Reforcar beneficios da rede autorizada e revisar vencimentos proximos.",
+    "inativo": "Ativar Pulse Loop imediato. Oferecer diagnostico de retorno e incentivo para reagendamento na rede.",
+    "multidealer": "Centralizar relacionamento. Confirmar concessionaria preferencial e padronizar proxima abordagem.",
+    "recorrente": "Nenhuma acao ativa de recuperacao. Registrar acompanhamento preventivo para a proxima revisao.",
 }
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -29,10 +22,8 @@ MODELS_DIR = _PROJECT_ROOT / settings.MODELS_DIR
 # Fallback checksums for models that predate sidecar files (.sha256).
 # The training pipeline writes a sidecar on each run, making this stale-proof.
 _FALLBACK_SHA256 = {
-    "churn_rf_calibrated.joblib": "72b20520a269f8c7d867f034832b61c5ad1534710910ba410a8cdb457a411a14",
-    "perfil_rf_classifier.joblib": "641318a241b101d8701348e40eb6c8396b6440876f38729eafcef6860b9a3079",
-    "churn_pos_venda_rf_calibrated.joblib": "bc096497fbe0fccb5109e7a115cd7983c1feff02ea1498301e27a766467bd75b",
-    "segmento_pos_venda_classifier_experimental.joblib": "6b6f2ef1718f03227d99fb2d7342d8cd5c221a42242e233ec6abc45c5831664f",
+    "churn_pos_venda_rf_calibrated.joblib": "c79d5e31e61e1e96718448b6179a0c3fab6b34ec3ca98f25cddd2d743a0fdb5f",
+    "segmento_pos_venda_classifier_experimental.joblib": "37738085ee2bb9edc03088ae0b65ea89265eb4a8a060c8b40ec73042eba97b9d",
 }
 
 
@@ -89,6 +80,7 @@ class PredictorService:
             cls._instance.model_churn = None
             cls._instance.model_perfil = None
             cls._instance.feature_names = None
+            cls._instance._perfil_loaded = False
         return cls._instance
 
     def _model_path(self, filename):
@@ -106,12 +98,17 @@ class PredictorService:
         return self.model_churn
 
     def _load_perfil(self):
-        if self.model_perfil is None:
+        if not self._perfil_loaded:
             path = self._model_path(settings.PERFIL_MODEL_FILENAME)
             if path.exists():
                 _ensure_models_read_only()
                 _verify_checksum(path)
                 self.model_perfil = joblib.load(path)
+            else:
+                _logger.warning(
+                    "Modelo de perfil nao encontrado em %s — predicao de perfil desativada", path
+                )
+            self._perfil_loaded = True
         return self.model_perfil
 
     def _build_frame(self, features):
@@ -165,16 +162,10 @@ class PredictorService:
             _alert(f'erro ao predizer perfil: {exc}')
             raise HTTPException(status_code=503, detail=f'Modelo de perfil falhou: {exc}') from exc
 
-    def predict(self, features, modelo_veiculo=None):
+    def predict(self, features):
         frame = self._build_frame(features)
         label, prob_churn, risk = self._predict_churn(frame)
         perfil, prob_perfil = self._predict_perfil(frame)
-        historico = []
-        if _COMPLAINTS_OK and modelo_veiculo:
-            try:
-                historico = get_top3_por_modelo(modelo_veiculo)
-            except Exception:
-                pass
         return PredictResponse(
             prediction=label,
             churn_probability=prob_churn,
@@ -182,7 +173,6 @@ class PredictorService:
             perfil_previsto=perfil,
             probabilidades_perfil=prob_perfil,
             acao_recomendada=_ACOES.get(perfil) if perfil else None,
-            historico_problemas=historico,
         )
 
     def predict_batch(self, items):
@@ -197,12 +187,6 @@ class PredictorService:
         for item, churn, perfil_result in zip(items, churn_results, perfil_results):
             label, prob_churn, risk = churn
             perfil, prob_perfil = perfil_result
-            historico = []
-            if _COMPLAINTS_OK and item.modelo_veiculo:
-                try:
-                    historico = get_top3_por_modelo(item.modelo_veiculo)
-                except Exception:
-                    pass
             responses.append(PredictResponse(
                 prediction=label,
                 churn_probability=prob_churn,
@@ -210,7 +194,6 @@ class PredictorService:
                 perfil_previsto=perfil,
                 probabilidades_perfil=prob_perfil,
                 acao_recomendada=_ACOES.get(perfil) if perfil else None,
-                historico_problemas=historico,
             ))
         return responses
 

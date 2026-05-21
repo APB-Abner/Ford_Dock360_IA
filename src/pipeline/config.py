@@ -47,9 +47,3 @@ LEAKAGE_COLUMNS = [
     "ultimo_servico_pos_corte",
     "qtd_servicos_pos_corte",
 ]
-
-# Compatibilidade com testes/scripts antigos. No novo fluxo, estas colunas antigas
-# nao devem existir no dataset de treino.
-PURCHASE_FEATURES_NUMERIC = SNAPSHOT_FEATURES_NUMERIC
-PURCHASE_FEATURES_CATEGORICAL = SNAPSHOT_FEATURES_CATEGORICAL
-LEAKAGE_BEHAVIORAL = LEAKAGE_COLUMNS

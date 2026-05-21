@@ -35,7 +35,7 @@ class FakeChurnModel:
 
 
 class FakePerfilModel:
-    classes_ = np.array(["fiel", "abandono"])
+    classes_ = np.array(["recorrente", "inativo"])
 
     def __init__(self):
         self.predict_proba_calls = 0
@@ -51,10 +51,12 @@ def test_predict_batch_retorna_lista_de_respostas_vetorizada():
     original_model_churn = service.model_churn
     original_model_perfil = service.model_perfil
     original_feature_names = service.feature_names
+    original_perfil_loaded = service._perfil_loaded
     churn_model = FakeChurnModel()
     perfil_model = FakePerfilModel()
     service.model_churn = churn_model
     service.model_perfil = perfil_model
+    service._perfil_loaded = True
     service.feature_names = FakeChurnModel.feature_names_in_
 
     features_1 = {
@@ -85,8 +87,8 @@ def test_predict_batch_retorna_lista_de_respostas_vetorizada():
     }
 
     items = [
-        PredictRequest(features=features_1, modelo_veiculo="Ranger"),
-        PredictRequest(features=features_2, modelo_veiculo="Ka"),
+        PredictRequest(features=features_1),
+        PredictRequest(features=features_2),
     ]
 
     try:
@@ -99,7 +101,12 @@ def test_predict_batch_retorna_lista_de_respostas_vetorizada():
         assert all(isinstance(response, PredictResponse) for response in responses)
         assert responses[0].prediction == "no_churn"
         assert responses[1].prediction == "churn"
+        assert responses[0].perfil_previsto == "recorrente"
+        assert responses[1].perfil_previsto == "inativo"
+        assert responses[0].acao_recomendada is not None
+        assert responses[1].acao_recomendada is not None
     finally:
         service.model_churn = original_model_churn
         service.model_perfil = original_model_perfil
         service.feature_names = original_feature_names
+        service._perfil_loaded = original_perfil_loaded
