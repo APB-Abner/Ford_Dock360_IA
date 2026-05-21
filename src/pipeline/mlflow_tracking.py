@@ -1,5 +1,7 @@
 """MLflow Tracking para experimentos pos-venda com snapshots por VIN."""
 
+import subprocess
+
 import mlflow
 import mlflow.sklearn
 import pandas as pd
@@ -24,6 +26,38 @@ from src.pipeline.train_churn_real import check_temporal_leakage
 
 VINS_PATH = "data/processed/dataset_churn_pos_venda.csv"
 TRACKING_URI = "file:./mlruns"
+
+
+def _git_value(args):
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        return ""
+    return result.stdout.strip()
+
+
+def _release_tags():
+    commit = _git_value(["rev-parse", "HEAD"])
+    tag = _git_value(["tag", "--points-at", "HEAD"]).splitlines()
+    tag = tag[0] if tag else "unreleased"
+    return {
+        "git_commit": commit,
+        "git_tag": tag,
+        "release_version": tag,
+        "tracking_type": "pos_venda_real",
+    }
+
+
+def _set_release_tags(extra=None):
+    tags = _release_tags()
+    if extra:
+        tags.update(extra)
+    mlflow.set_tags(tags)
 
 
 def setup_mlflow(tracking_uri=TRACKING_URI):
@@ -60,11 +94,13 @@ def register_kmeans_experiment(experiment_name="ford_segmentacao_kmeans"):
 
     for row in candidate_rows:
         with mlflow.start_run(run_name=f"kmeans_k_{row['k']}"):
+            _set_release_tags({"pipeline_step": "kmeans_candidate"})
             mlflow.log_param("k", row["k"])
             mlflow.log_metric("silhouette_score", row["silhouette_score"])
             mlflow.log_metric("inertia", row["inertia"])
 
     with mlflow.start_run(run_name="kmeans_selected_k"):
+        _set_release_tags({"pipeline_step": "kmeans_selected"})
         mlflow.log_param("selected_k", best["k"])
         mlflow.log_metric("selected_silhouette_score", best["silhouette_score"])
         mlflow.log_metric("selected_inertia", best["inertia"])
@@ -96,6 +132,7 @@ def register_churn_classifier(experiment_name="ford_classificacao_churn", model_
     auc = roc_auc_score(y_test, y_score)
 
     with mlflow.start_run(run_name="RandomForest_Calibrated") as run:
+        _set_release_tags({"pipeline_step": "churn_classifier", "target": TARGET_CHURN})
         mlflow.log_param("model", "RandomForest_Calibrated")
         mlflow.log_metric("auc_roc", auc)
         mlflow.sklearn.log_model(model, "model")
