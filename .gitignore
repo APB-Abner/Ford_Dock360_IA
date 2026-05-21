@@ -13,6 +13,9 @@ __pycache__/
 .ipynb_checkpoints/
 *.pkl
 *.joblib
+*.tar.gz
+*.tar.gz.sha256
+*.manifest.txt
 mlruns/
 
 # Runtime logs and agent artifacts
