@@ -99,6 +99,17 @@ Registra os artefatos ja gerados dos experimentos de churn, segmentacao
 K-Means e classificador experimental de segmento. Esse passo e evidencia de
 experimentacao; nao e necessario para a API em runtime.
 
+## Notas de Entrega
+
+- `src/pipeline/complaints_loader.py`, `src/pipeline/visualizations.py` e
+  `reports/cybersecurity.md` foram removidos do escopo atual.
+- O tracking MLflow e apenas evidencia experimental; a API nao depende dele em
+  runtime.
+- Os notebooks de EDA geram graficos de apoio em `reports/`, mas nao sao passos
+  obrigatorios do pipeline produtivo.
+- Evite reexecutar treino sem necessidade antes da entrega, pois isso altera
+  modelos e checksums.
+
 ## API FastAPI
 
 ### Subir a API
