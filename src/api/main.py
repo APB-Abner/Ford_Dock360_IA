@@ -1,11 +1,9 @@
 from fastapi import FastAPI
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
+from src.api.limiter import limiter
 from src.api.routers import auth, health, predict
-
-limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="Ford VinGuard ML API", redoc_url=None, openapi_url=None)
 app.state.limiter = limiter

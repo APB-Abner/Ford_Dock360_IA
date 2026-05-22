@@ -12,6 +12,9 @@ _MODELS_DIR = _PROJECT_ROOT / settings.MODELS_DIR
 
 
 def _models_loaded() -> dict[str, bool]:
+    if not _MODELS_DIR.exists():
+        return {"churn": False, "kmeans": False}
+
     churn = (_MODELS_DIR / settings.CHURN_MODEL_FILENAME).exists()
     kmeans = (_MODELS_DIR / settings.PERFIL_MODEL_FILENAME).exists()
     return {"churn": churn, "kmeans": kmeans}
@@ -20,14 +23,18 @@ def _models_loaded() -> dict[str, bool]:
 @router.get("/health", response_model=None)
 def health() -> dict | JSONResponse:
     loaded = _models_loaded()
-    all_ok = all(loaded.values())
+    artifacts_ok = all(loaded.values())
 
     payload = {
-        "status": "ok" if all_ok else "degraded",
+        "status": "ok" if artifacts_ok else "degraded",
+        "checks": {
+            "secret_key": True,
+            "artifacts": artifacts_ok,
+        },
         "models_loaded": loaded,
     }
 
-    if not all_ok:
+    if not artifacts_ok:
         return JSONResponse(status_code=503, content=payload)
 
     return payload

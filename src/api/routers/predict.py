@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 
-from src.api.main import limiter
+from src.api.limiter import limiter
 from src.api.models.schemas import BatchPredictRequest, PredictRequest, PredictResponse, RoleEnum
 from src.api.security.auth import require_role
 from src.api.services.predictor import predictor_service

@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
-from src.api.main import limiter
+from src.api.limiter import limiter
 
 from src.api.config import settings
 from src.api.models.schemas import DemoTokenResponse, RoleEnum
