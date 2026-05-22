@@ -46,7 +46,7 @@ def _alert(message):
 
 def _ensure_models_read_only():
     if not MODELS_DIR.exists():
-        raise HTTPException(status_code=503, detail=f"Diretorio de modelos nao encontrado: {MODELS_DIR}")
+        raise HTTPException(status_code=503, detail="Servico indisponivel: modelos nao carregados")
 
     paths = [MODELS_DIR] + list(MODELS_DIR.glob("*.joblib"))
     for path in paths:
@@ -104,7 +104,7 @@ class PredictorService:
         if self.model_churn is None:
             path = self._model_path(settings.CHURN_MODEL_FILENAME)
             if not path.exists():
-                raise HTTPException(status_code=503, detail=f"Modelo churn nao encontrado: {path}")
+                raise HTTPException(status_code=503, detail="Servico indisponivel: modelo nao encontrado")
             _ensure_models_read_only()
             _verify_checksum(path)
             self.model_churn = joblib.load(path)
