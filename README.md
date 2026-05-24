@@ -134,10 +134,22 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 }
 ```
 
-### Token de demo/servico
+### Autenticacao da API
 
-Os endpoints `/predict` e `/predict/batch` exigem Bearer JWT com role
-`analyst` ou `admin`.
+`/health` e `/` sao publicos. Os endpoints `/predict`, `/predict-batch` e
+`/predict/batch` aceitam dois caminhos de autenticacao:
+
+- `Authorization: Bearer <jwt>`: JWT de usuario/demo com role `analyst` ou
+  `admin`. O token gerado por `/auth/demo-token` expira conforme
+  `ACCESS_TOKEN_EXPIRE_MINUTES` e deve ser usado apenas para Swagger/demo
+  manual.
+- `X-ML-Service-Token: <token>`: token fixo server-to-server para o Java BFF.
+  Esse token nao expira pela FastAPI e deve vir somente de secret/variavel de
+  ambiente. Nao registre esse valor em logs, exemplos ou arquivos versionados.
+
+Para compatibilidade tecnica, a FastAPI tambem aceita o service token como
+`Authorization: Bearer <service_token>`, mas o header preferido para o BFF e
+`X-ML-Service-Token`.
 
 Para gerar um token local usando o mesmo `SECRET_KEY` da API:
 
@@ -154,7 +166,19 @@ curl -X POST "https://ford-vinguard-api.onrender.com/auth/demo-token?role=analys
 ```
 
 Use o `access_token` retornado como `Authorization: Bearer <token>` na FastAPI
-ou como header `X-ML-Demo-Token` no BFF Java.
+ou como header `X-ML-Demo-Token` no BFF Java para teste manual. O Java BFF nao
+deve depender desse token demo para producao.
+
+Configure o service token fixo no ambiente da FastAPI:
+
+```env
+ML_SERVICE_TOKEN=<service-token-fixo-gerado-fora-do-repositorio>
+# fallback aceito, se voce quiser usar o mesmo nome no Java e na FastAPI:
+FORD_ML_SERVICE_TOKEN=<service-token-fixo-gerado-fora-do-repositorio>
+```
+
+No Java BFF, configure o mesmo valor como `FORD_ML_SERVICE_TOKEN`; o BFF envia
+esse segredo para a FastAPI com `X-ML-Service-Token`.
 
 ## Deploy no Render
 
@@ -173,8 +197,10 @@ Variaveis criadas/configuradas no Render:
 - `SECRET_KEY`: gerada pelo Render, obrigatoria para JWT
 - `JWT_ISSUER`: `ford-vinguard-api`
 - `JWT_AUDIENCE`: `ford-vinguard-api`
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: validade dos tokens de demo/servico
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: validade dos JWTs de demo
 - `DEMO_TOKEN_SECRET`: segredo opcional para habilitar `/auth/demo-token`
+- `ML_SERVICE_TOKEN`: service token fixo para Java BFF -> FastAPI ML
+- `FORD_ML_SERVICE_TOKEN`: fallback aceito para o service token fixo
 - `MODELS_DIR`: `models`
 - `CHURN_MODEL_FILENAME`: `churn_pos_venda_rf_calibrated.joblib`
 - `PERFIL_MODEL_FILENAME`: `kmeans_segmentador_pos_venda.joblib`
@@ -221,6 +247,7 @@ Variaveis obrigatorias/recomendadas no Azure Container Apps:
 PORT=8000
 SECRET_KEY=<chave-com-pelo-menos-32-caracteres>
 DEMO_TOKEN_SECRET=<segredo-para-gerar-token-demo>
+ML_SERVICE_TOKEN=<service-token-fixo-do-bff>
 MODELS_DIR=models
 CHURN_MODEL_FILENAME=churn_pos_venda_rf_calibrated.joblib
 PERFIL_MODEL_FILENAME=kmeans_segmentador_pos_venda.joblib
@@ -245,6 +272,7 @@ docker run --rm -p 8000:8000 \
   -e PORT=8000 \
   -e SECRET_KEY="troque-por-uma-chave-com-32-caracteres" \
   -e DEMO_TOKEN_SECRET="troque-por-um-segredo-de-demo" \
+  -e ML_SERVICE_TOKEN="<service-token-fixo-do-bff>" \
   -e MODELS_DIR=models \
   -e CHURN_MODEL_FILENAME=churn_pos_venda_rf_calibrated.joblib \
   -e PERFIL_MODEL_FILENAME=kmeans_segmentador_pos_venda.joblib \

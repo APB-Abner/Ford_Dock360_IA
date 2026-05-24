@@ -1,6 +1,7 @@
 import os
 
 os.environ.setdefault("SECRET_KEY", "x" * 32)
+os.environ.setdefault("ML_SERVICE_TOKEN", "test-service-token-fixed")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -42,3 +43,8 @@ def viewer_headers(viewer_token):
 @pytest.fixture(scope="session")
 def admin_headers(admin_token):
     return {"Authorization": f"Bearer {admin_token}"}
+
+
+@pytest.fixture(scope="session")
+def service_token_headers():
+    return {"X-ML-Service-Token": "test-service-token-fixed"}

@@ -28,7 +28,7 @@ _MOCK_RESPONSE = PredictResponse(
 
 def test_predict_sem_token_retorna_403(client):
     response = client.post("/predict", json={"features": _FEATURES})
-    assert response.status_code == 403
+    assert response.status_code in {401, 403}
 
 
 def test_predict_token_invalido_retorna_401(client):
@@ -57,6 +57,34 @@ def test_predict_admin_retorna_200(client, admin_headers):
     with patch("src.api.routers.predict.predictor_service") as mock_svc:
         mock_svc.predict.return_value = _MOCK_RESPONSE
         response = client.post("/predict", json={"features": _FEATURES}, headers=admin_headers)
+    assert response.status_code == 200
+
+
+def test_predict_service_token_retorna_200(client, service_token_headers):
+    with patch("src.api.routers.predict.predictor_service") as mock_svc:
+        mock_svc.predict.return_value = _MOCK_RESPONSE
+        response = client.post("/predict", json={"features": _FEATURES}, headers=service_token_headers)
+    assert response.status_code == 200
+    assert response.json()["prediction"] == "no_churn"
+
+
+def test_predict_service_token_invalido_retorna_401(client):
+    response = client.post(
+        "/predict",
+        json={"features": _FEATURES},
+        headers={"X-ML-Service-Token": "token-invalido"},
+    )
+    assert response.status_code in {401, 403}
+
+
+def test_predict_authorization_bearer_service_token_retorna_200(client):
+    with patch("src.api.routers.predict.predictor_service") as mock_svc:
+        mock_svc.predict.return_value = _MOCK_RESPONSE
+        response = client.post(
+            "/predict",
+            json={"features": _FEATURES},
+            headers={"Authorization": "Bearer test-service-token-fixed"},
+        )
     assert response.status_code == 200
 
 

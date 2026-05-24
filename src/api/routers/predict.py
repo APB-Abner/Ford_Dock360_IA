@@ -15,7 +15,7 @@ async def predict(request: Request, body: PredictRequest, role: str = Depends(re
 
 
 @router.post("/predict-batch", response_model=BatchPredictResponse)
-@router.post("/predict/batch", response_model=BatchPredictResponse)
+@router.post("/predict/batch", response_model=BatchPredictResponse, include_in_schema=False)
 @limiter.limit("20/minute")
 async def predict_batch(request: Request, body: BatchPredictRequest, role: str = Depends(require_role(RoleEnum.analyst))):
     return BatchPredictResponse(items=predictor_service.predict_batch(body.items))

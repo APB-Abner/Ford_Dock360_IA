@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     DEMO_TOKEN_SECRET: str | None = None
     DEMO_TOKEN_SUBJECT: str = "demo-consultor"
+    ML_SERVICE_TOKEN: str | None = None
+    FORD_ML_SERVICE_TOKEN: str | None = None
 
     # Paths/names expected by the API runtime. Relative paths use the repo root.
     MODELS_DIR: str = "models"

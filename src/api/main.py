@@ -5,7 +5,14 @@ from slowapi.errors import RateLimitExceeded
 from src.api.limiter import limiter
 from src.api.routers import auth, health, predict
 
-app = FastAPI(title="Ford VinGuard ML API", redoc_url=None, openapi_url=None)
+app = FastAPI(
+    title="Ford VinGuard ML API",
+    description=(
+        "Endpoints de predicao aceitam JWT Bearer para usuario/demo ou "
+        "X-ML-Service-Token para comunicacao server-to-server Java BFF -> FastAPI ML."
+    ),
+    redoc_url=None, openapi_url=None
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
